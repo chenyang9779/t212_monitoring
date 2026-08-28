@@ -89,6 +89,33 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
+          <h2>Position activity</h2>
+          <p class="muted">Quantity changes observed while the monitor is running</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="activity-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Instrument</th>
+              <th>Event</th>
+              <th class="num">Before</th>
+              <th class="num">After</th>
+              <th class="num">Delta</th>
+              <th class="num">Price</th>
+            </tr>
+          </thead>
+          <tbody id="positionEventsBody">
+            <tr><td colspan="7" class="empty">No position activity recorded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
           <h2>Alerts</h2>
           <p class="muted">Optional thresholds are configured in .env</p>
         </div>
