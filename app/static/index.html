@@ -75,6 +75,38 @@
       </section>
     </div>
 
+    <section id="attributionPanel" class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>P/L attribution</h2>
+          <p class="muted">Open-position contribution to current unrealized P/L in the account currency</p>
+        </div>
+      </div>
+      <div class="attribution-summary" aria-label="P/L attribution summary">
+        <div><span>Account unrealized P/L</span><strong id="attributionAccount">—</strong></div>
+        <div><span>Position P/L sum</span><strong id="attributionSum">—</strong></div>
+        <div><span>Gross gains</span><strong id="attributionGains">—</strong></div>
+        <div><span>Gross losses</span><strong id="attributionLosses">—</strong></div>
+      </div>
+      <div class="table-wrap">
+        <table class="attribution-table">
+          <thead>
+            <tr>
+              <th>Instrument</th>
+              <th class="num">P/L</th>
+              <th class="num">Net contribution</th>
+              <th class="num">Gross share</th>
+              <th class="num">FX impact</th>
+            </tr>
+          </thead>
+          <tbody id="attributionBody">
+            <tr><td colspan="5" class="empty">Waiting for attribution data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p id="attributionNote" class="allocation-note muted"></p>
+    </section>
+
     <div class="charts-grid">
       <section id="comparisonPanel" class="panel">
         <div class="panel-heading">
@@ -195,5 +227,6 @@
   <script src="/static/allocation.js" defer></script>
   <script src="/static/drawdown.js" defer></script>
   <script src="/static/comparison.js" defer></script>
+  <script src="/static/attribution.js" defer></script>
 </body>
 </html>
