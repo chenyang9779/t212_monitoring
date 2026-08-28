@@ -31,6 +31,7 @@ class MonitorService:
         self._stop = asyncio.Event()
         self._last_snapshot_monotonic = 0.0
         self._active_alert_keys: set[str] = set()
+        self._previous_positions: dict[str, dict[str, Any]] | None = None
 
     async def start(self) -> None:
         self._stop.clear()
@@ -64,6 +65,8 @@ class MonitorService:
                 account = normalize_account(account_response.data)
                 positions = [normalize_position(p) for p in positions_response.data]
 
+                await self._record_position_events(now, positions)
+
                 self.state.account = account
                 self.state.positions = positions
                 self.state.last_sync = now
@@ -87,6 +90,58 @@ class MonitorService:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_for)
             except asyncio.TimeoutError:
                 pass
+
+    async def _record_position_events(
+        self,
+        now: str,
+        positions: list[dict[str, Any]],
+    ) -> None:
+        current = {position["ticker"]: position for position in positions}
+
+        # The first successful poll establishes a baseline. We intentionally do
+        # not emit OPEN events for positions that existed before the monitor started.
+        if self._previous_positions is None:
+            self._previous_positions = current
+            return
+
+        previous = self._previous_positions
+        epsilon = 1e-12
+
+        for ticker in sorted(set(previous) | set(current)):
+            before_position = previous.get(ticker)
+            after_position = current.get(ticker)
+            quantity_before = float(before_position["quantity"]) if before_position else 0.0
+            quantity_after = float(after_position["quantity"]) if after_position else 0.0
+            delta = quantity_after - quantity_before
+
+            if abs(delta) <= epsilon:
+                continue
+
+            if quantity_before <= epsilon and quantity_after > epsilon:
+                event_type = "OPEN"
+            elif quantity_before > epsilon and quantity_after <= epsilon:
+                event_type = "CLOSE"
+            elif delta > 0:
+                event_type = "ADD"
+            else:
+                event_type = "REDUCE"
+
+            reference = after_position or before_position
+            assert reference is not None
+            await asyncio.to_thread(
+                self.store.add_position_event,
+                now,
+                ticker,
+                reference["name"],
+                event_type,
+                quantity_before,
+                quantity_after,
+                delta,
+                reference.get("current_price"),
+                reference.get("currency") or "",
+            )
+
+        self._previous_positions = current
 
     async def _evaluate_alerts(
         self,
