@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trading 212 Position Monitor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>Trading 212 Position Monitor</h1>
+        <p class="muted">Read-only portfolio monitoring</p>
+      </div>
+      <div class="status-wrap">
+        <span id="envBadge" class="badge">—</span>
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">Connecting…</span>
+      </div>
+    </header>
+
+    <section id="errorBox" class="error hidden" role="alert"></section>
+
+    <section class="cards" aria-label="Portfolio summary">
+      <article class="card"><span>Total value</span><strong id="totalValue">—</strong></article>
+      <article class="card"><span>Invested</span><strong id="invested">—</strong></article>
+      <article class="card"><span>Available cash</span><strong id="cash">—</strong></article>
+      <article class="card"><span>Unrealized P/L</span><strong id="unrealized">—</strong><small id="unrealizedPct"></small></article>
+      <article class="card"><span>Realized P/L</span><strong id="realized">—</strong></article>
+      <article class="card"><span>Open positions</span><strong id="positionCount">—</strong></article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Account history</h2>
+          <p class="muted">Snapshot history stored locally in SQLite</p>
+        </div>
+        <select id="historyRange" aria-label="History range">
+          <option value="1">1h</option>
+          <option value="6">6h</option>
+          <option value="24" selected>24h</option>
+          <option value="168">7d</option>
+        </select>
+      </div>
+      <canvas id="historyChart" height="230" aria-label="Portfolio value history"></canvas>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Open positions</h2>
+          <p id="lastSync" class="muted">Last sync: —</p>
+        </div>
+        <input id="filter" type="search" placeholder="Filter ticker / name" aria-label="Filter positions">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Instrument</th>
+              <th class="num">Qty</th>
+              <th class="num">Avg</th>
+              <th class="num">Current</th>
+              <th class="num">Value</th>
+              <th class="num">P/L</th>
+              <th class="num">P/L %</th>
+            </tr>
+          </thead>
+          <tbody id="positionsBody">
+            <tr><td colspan="7" class="empty">Waiting for data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Alerts</h2>
+          <p class="muted">Optional thresholds are configured in .env</p>
+        </div>
+      </div>
+      <div id="alerts" class="alerts"><div class="empty">No alerts.</div></div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
