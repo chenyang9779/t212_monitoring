@@ -122,6 +122,26 @@
       <p id="qualityNote" class="allocation-note muted"></p>
     </section>
 
+    <section id="storagePanel" class="panel">
+      <div class="panel-heading">
+        <div><h2>Storage & retention</h2><p class="muted">SQLite footprint, table coverage and optional raw-data retention policy</p></div>
+        <button id="storageRefresh" class="small-button" type="button">Refresh</button>
+      </div>
+      <div class="storage-summary">
+        <div><span>Total files</span><strong id="storageTotal">—</strong></div>
+        <div><span>Database</span><strong id="storageDb">—</strong></div>
+        <div><span>Reclaimable</span><strong id="storageReclaimable">—</strong></div>
+        <div><span>Retention</span><strong id="storageRetention">—</strong></div>
+      </div>
+      <div class="table-wrap">
+        <table class="storage-table">
+          <thead><tr><th>Table</th><th class="num">Rows</th><th>Oldest</th><th>Newest</th><th>Retention</th></tr></thead>
+          <tbody id="storageBody"><tr><td colspan="5" class="empty">Waiting for storage diagnostics…</td></tr></tbody>
+        </table>
+      </div>
+      <p id="storageNote" class="allocation-note muted"></p>
+    </section>
+
     <section id="brokerActivityPanel" class="panel">
       <div class="panel-heading"><div><h2>Broker activity</h2><p class="muted">Read-only Trading 212 pending orders, historical orders and transactions</p></div><button id="brokerRefresh" class="small-button" type="button">Refresh</button></div>
       <div class="broker-tabs" role="tablist" aria-label="Broker activity views"><button class="broker-tab active" type="button" data-view="pending" role="tab">Pending orders</button><button class="broker-tab" type="button" data-view="history" role="tab">Order history</button><button class="broker-tab" type="button" data-view="transactions" role="tab">Transactions</button></div>
@@ -156,6 +176,7 @@
   <script src="/static/comparison.js" defer></script>
   <script src="/static/attribution.js" defer></script>
   <script src="/static/quality.js" defer></script>
+  <script src="/static/storage.js" defer></script>
   <script src="/static/broker.js" defer></script>
   <script src="/static/reconciliation.js" defer></script>
   <script src="/static/lifecycle.js" defer></script>
