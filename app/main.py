@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
+from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .service import MonitorService
 
 settings = load_settings()
@@ -24,7 +25,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.5.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.6.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -110,6 +111,69 @@ def api_pnl_attribution() -> dict[str, object]:
         latest.get("account"),
         latest.get("positions") or [],
     )
+
+
+@app.get("/api/market/catalog")
+def api_market_catalog(
+    source: str = Query(default="t212_position", min_length=1),
+) -> dict[str, object]:
+    return {"source": source, "items": store.market_catalog(source=source)}
+
+
+@app.get("/api/market/quotes")
+def api_market_quotes(
+    ticker: str = Query(..., min_length=1),
+    hours: int = Query(default=24, ge=1, le=720),
+    source: str = Query(default="t212_position", min_length=1),
+    limit: int = Query(default=10000, ge=1, le=100000),
+) -> dict[str, object]:
+    return {
+        "ticker": ticker,
+        "hours": hours,
+        "source": source,
+        "items": store.market_quotes(
+            ticker=ticker,
+            hours=hours,
+            source=source,
+            limit=limit,
+        ),
+    }
+
+
+@app.get("/api/market/bars")
+def api_market_bars(
+    ticker: str = Query(..., min_length=1),
+    hours: int = Query(default=24, ge=1, le=720),
+    minutes: int = Query(default=5),
+    source: str = Query(default="t212_position", min_length=1),
+) -> dict[str, object]:
+    if minutes not in SUPPORTED_BAR_MINUTES:
+        supported = ", ".join(str(value) for value in sorted(SUPPORTED_BAR_MINUTES))
+        return {
+            "ticker": ticker,
+            "hours": hours,
+            "minutes": minutes,
+            "source": source,
+            "available": False,
+            "error": f"Unsupported bar interval. Supported minutes: {supported}",
+            "items": [],
+        }
+
+    quotes = store.market_quotes(
+        ticker=ticker,
+        hours=hours,
+        source=source,
+        limit=100000,
+    )
+    return {
+        "ticker": ticker,
+        "hours": hours,
+        "minutes": minutes,
+        "source": source,
+        "available": True,
+        "sampled": True,
+        "items": aggregate_quotes_to_bars(quotes, minutes),
+    }
 
 
 @app.get("/api/orders/pending")
