@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      T212_API_KEY: ci-placeholder-key
+      T212_API_SECRET: ci-placeholder-secret
+      T212_ENV: demo
+      T212_POLL_SECONDS: "6"
+      T212_SNAPSHOT_SECONDS: "30"
+      T212_DB_PATH: /tmp/t212-monitor-ci.db
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
+
+      - name: Compile Python sources
+        run: python -m compileall -q app tests
+
+      - name: Import application
+        run: python -c "import app.main; print(app.main.app.version)"
+
+      - name: Run tests
+        run: python -m pytest -q
