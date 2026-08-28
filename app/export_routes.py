@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from .db import SnapshotStore
+from .event_queries import position_events_all
 from .exporting import export_response, flatten_record
+from .history_queries import account_history_all, position_history_all
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .service import MonitorService
 
@@ -46,7 +48,7 @@ def build_export_router(store: SnapshotStore, monitor: MonitorService) -> APIRou
         format: str = Query(default="csv", pattern="^(csv|jsonl)$"),
     ):
         return export_response(
-            store.history(hours=hours),
+            account_history_all(store.path, hours=hours),
             f"account_history_{hours}h",
             format,
         )
@@ -58,18 +60,17 @@ def build_export_router(store: SnapshotStore, monitor: MonitorService) -> APIRou
         format: str = Query(default="csv", pattern="^(csv|jsonl)$"),
     ):
         return export_response(
-            store.position_history(ticker=ticker, hours=hours),
+            position_history_all(store.path, ticker=ticker, hours=hours),
             f"position_history_{ticker}_{hours}h",
             format,
         )
 
     @router.get("/position-events")
     def export_position_events(
-        limit: int = Query(default=500, ge=1, le=500),
         format: str = Query(default="csv", pattern="^(csv|jsonl)$"),
     ):
         return export_response(
-            store.position_events(limit=limit),
+            position_events_all(store.path),
             "position_events",
             format,
         )
