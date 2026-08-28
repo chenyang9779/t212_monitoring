@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.2.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -60,6 +60,11 @@ def api_position_history(
     hours: int = Query(default=24, ge=1, le=720),
 ) -> dict[str, object]:
     return {"items": store.position_history(ticker=ticker, hours=hours)}
+
+
+@app.get("/api/position-events")
+def api_position_events(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
+    return {"items": store.position_events(limit=limit)}
 
 
 @app.get("/api/alerts")
