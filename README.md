@@ -12,6 +12,7 @@ A read-only Trading 212 portfolio monitor designed so a strategy/execution layer
 - Exposes read-only pending orders, historical orders, and transactions when the API key has those permissions.
 - Stores sampled position marks in a separate market-data table for downstream analytics.
 - Exposes CSV and JSONL download endpoints for downstream notebooks and services.
+- Exposes an SSE live stream for browsers and other read-only consumers.
 - Contains no order-placement code.
 
 ## Security model
@@ -82,6 +83,11 @@ Core monitoring:
 - `GET /api/pnl-attribution`
 - `GET /api/alerts?limit=50`
 
+Live stream:
+
+- `GET /api/stream`
+- `GET /api/stream/status`
+
 Broker history:
 
 - `GET /api/orders/pending`
@@ -95,6 +101,36 @@ Stored market-data interface:
 - `GET /api/market/bars?ticker=...&hours=24&minutes=5`
 
 Supported sampled-bar intervals are `1, 5, 15, 30, 60, 240, 1440` minutes.
+
+## SSE live stream
+
+`GET /api/stream` is a read-only Server-Sent Events feed. A new connection first receives a `ready` event containing current monitor status and the latest portfolio state. Subsequent events are emitted from the existing monitor polling loop; opening the stream does not create extra Trading 212 polling requests.
+
+Current event names:
+
+- `ready` — current monitor status and latest portfolio on connection.
+- `portfolio` — normalized account and open-position state after a successful Trading 212 poll.
+- `snapshot` — emitted after a local SQLite snapshot is saved.
+- `position_event` — an observed OPEN / ADD / REDUCE / CLOSE quantity change.
+- `alert` — a newly activated monitor alert.
+- `monitor_error` — a Trading 212 monitoring error.
+- `maintenance` / `maintenance_error` — optional retention-maintenance status.
+
+The server sends comment heartbeats every 15 seconds when no event is available. Each subscriber has a bounded in-memory queue; a slow consumer drops its oldest pending event rather than blocking the broker polling loop. This stream is therefore intended for live state notification, not as an authoritative durable event log. Durable consumers should use SQLite/export/history endpoints to recover state after disconnects.
+
+The browser dashboard opens the SSE stream automatically. Existing periodic refreshes remain as a fallback while the dashboard is progressively migrated toward event-driven updates.
+
+You can inspect the feed directly:
+
+```bash
+curl -N http://127.0.0.1:8000/api/stream
+```
+
+And inspect stream counters:
+
+```bash
+curl -s http://127.0.0.1:8000/api/stream/status | python -m json.tool
+```
 
 ## Export API
 
@@ -167,6 +203,6 @@ quant_service
     └── optional execution adapter
 ```
 
-For a local prototype, the quant service can open `data/monitor.db` in SQLite read-only mode. For a cleaner long-term boundary, prefer consuming the monitor's HTTP API or export endpoints so the quant service does not depend on this repository's SQLite schema.
+For a local prototype, the quant service can open `data/monitor.db` in SQLite read-only mode. For a cleaner long-term boundary, prefer consuming the monitor's HTTP API, export endpoints, or SSE notifications so the quant service does not depend on this repository's SQLite schema.
 
 The monitor must never depend on the quant service to keep collecting broker state. The dependency should be one-way: quant reads monitoring data; monitoring does not import strategy code.
