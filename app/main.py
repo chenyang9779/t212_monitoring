@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.4.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.5.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -110,6 +110,32 @@ def api_pnl_attribution() -> dict[str, object]:
         latest.get("account"),
         latest.get("positions") or [],
     )
+
+
+@app.get("/api/orders/pending")
+async def api_pending_orders() -> dict[str, object]:
+    return await monitor.pending_orders()
+
+
+@app.get("/api/orders/history")
+async def api_order_history(
+    limit: int = Query(default=50, ge=1, le=50),
+    ticker: str | None = Query(default=None, min_length=1),
+    next_page_path: str | None = Query(default=None, min_length=1),
+) -> dict[str, object]:
+    return await monitor.historical_orders(
+        limit=limit,
+        ticker=ticker,
+        next_page_path=next_page_path,
+    )
+
+
+@app.get("/api/transactions")
+async def api_transactions(
+    limit: int = Query(default=50, ge=1, le=50),
+    next_page_path: str | None = Query(default=None, min_length=1),
+) -> dict[str, object]:
+    return await monitor.transactions(limit=limit, next_page_path=next_page_path)
 
 
 @app.get("/api/alerts")
