@@ -10,8 +10,11 @@
   const selectAllBtn = document.getElementById("comparisonSelectAll");
   const clearBtn = document.getElementById("comparisonClear");
 
+  const SELECTION_STORAGE_KEY = "t212_monitoring.comparison.selected_tickers.v1";
+
   let positions = [];
   let selectedTickers = new Set();
+  let selectionInitialized = false;
   let requestId = 0;
 
   const palette = [
@@ -48,18 +51,56 @@
     return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
   }
 
+  function loadPersistedSelection() {
+    try {
+      const raw = window.localStorage.getItem(SELECTION_STORAGE_KEY);
+      if (raw === null) return null;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return null;
+      return parsed.filter((ticker) => typeof ticker === "string" && ticker.length > 0);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function persistSelection() {
+    try {
+      window.localStorage.setItem(
+        SELECTION_STORAGE_KEY,
+        JSON.stringify([...selectedTickers]),
+      );
+    } catch (_) {
+      // Storage may be disabled; in-memory selection still works for this page session.
+    }
+  }
+
+  function initializeSelection(sortedPositions) {
+    if (selectionInitialized) return;
+
+    const persisted = loadPersistedSelection();
+    if (persisted !== null) {
+      selectedTickers = new Set(persisted);
+    } else {
+      selectedTickers = new Set(
+        sortedPositions.slice(0, Math.min(4, sortedPositions.length)).map((position) => position.ticker),
+      );
+      persistSelection();
+    }
+    selectionInitialized = true;
+  }
+
   function renderTickerSelector() {
     const sorted = positions
       .slice()
       .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)));
 
-    const available = new Set(sorted.map((p) => p.ticker));
-    selectedTickers = new Set([...selectedTickers].filter((ticker) => available.has(ticker)));
+    initializeSelection(sorted);
 
-    if (!selectedTickers.size && sorted.length) {
-      for (const position of sorted.slice(0, Math.min(4, sorted.length))) {
-        selectedTickers.add(position.ticker);
-      }
+    const available = new Set(sorted.map((p) => p.ticker));
+    const previousSize = selectedTickers.size;
+    selectedTickers = new Set([...selectedTickers].filter((ticker) => available.has(ticker)));
+    if (selectedTickers.size !== previousSize) {
+      persistSelection();
     }
 
     tickersEl.innerHTML = sorted.map((position) => `
@@ -73,6 +114,7 @@
       input.addEventListener("change", () => {
         if (input.checked) selectedTickers.add(input.value);
         else selectedTickers.delete(input.value);
+        persistSelection();
         refreshChart().catch(renderError);
       });
     });
@@ -258,14 +300,14 @@
   rangeEl.addEventListener("change", () => refreshChart().catch(renderError));
   selectAllBtn.addEventListener("click", () => {
     selectedTickers = new Set(positions.map((position) => position.ticker));
+    persistSelection();
     renderTickerSelector();
     refreshChart().catch(renderError);
   });
   clearBtn.addEventListener("click", () => {
     selectedTickers.clear();
+    persistSelection();
     renderTickerSelector();
-    selectedTickers.clear();
-    tickersEl.querySelectorAll("input[type=checkbox]").forEach((input) => { input.checked = false; });
     refreshChart().catch(renderError);
   });
   window.addEventListener("resize", () => refreshChart().catch(() => {}));
