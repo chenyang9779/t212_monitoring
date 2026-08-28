@@ -96,3 +96,97 @@ def calculate_segmented_drawdown(
         "observations": len(valid_points),
         "segments": segments,
     }
+
+
+def calculate_pnl_attribution(
+    account: dict[str, Any] | None,
+    positions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attribute current unrealized P/L to open positions in account currency.
+
+    Trading 212 exposes ``walletImpact.unrealizedProfitLoss`` per position in the
+    account currency. Only positions with a finite account-currency wallet P/L are
+    included; instrument-currency P/L is never mixed into this calculation.
+    """
+
+    if not account:
+        return {
+            "available": False,
+            "reason": "account data unavailable",
+            "currency": "",
+            "account_unrealized_pl": None,
+            "sum_position_unrealized_pl": None,
+            "reconciliation_difference": None,
+            "gross_gains": None,
+            "gross_losses": None,
+            "rows": [],
+            "accounted_positions": 0,
+            "total_positions": len(positions),
+        }
+
+    currency = str(account.get("currency") or "")
+    account_unrealized = _finite_number(account.get("unrealized_pl"))
+    rows: list[dict[str, Any]] = []
+
+    for position in positions:
+        pnl = _finite_number(position.get("wallet_unrealized_pl"))
+        wallet_currency = str(position.get("wallet_currency") or "")
+        if pnl is None:
+            continue
+        if currency and wallet_currency and wallet_currency != currency:
+            continue
+        rows.append(
+            {
+                "ticker": str(position.get("ticker") or "UNKNOWN"),
+                "name": str(position.get("name") or "Unknown instrument"),
+                "pnl": pnl,
+                "fx_impact": _finite_number(position.get("wallet_fx_impact")),
+            }
+        )
+
+    if not rows:
+        return {
+            "available": False,
+            "reason": "account-currency position P/L is unavailable",
+            "currency": currency,
+            "account_unrealized_pl": account_unrealized,
+            "sum_position_unrealized_pl": None,
+            "reconciliation_difference": None,
+            "gross_gains": None,
+            "gross_losses": None,
+            "rows": [],
+            "accounted_positions": 0,
+            "total_positions": len(positions),
+        }
+
+    summed = sum(row["pnl"] for row in rows)
+    gross_gains = sum(max(row["pnl"], 0.0) for row in rows)
+    gross_losses = sum(min(row["pnl"], 0.0) for row in rows)
+    gross_abs = sum(abs(row["pnl"]) for row in rows)
+
+    for row in rows:
+        row["gross_share_pct"] = abs(row["pnl"]) / gross_abs * 100.0 if gross_abs > 0 else 0.0
+        row["net_contribution_pct"] = (
+            row["pnl"] / account_unrealized * 100.0
+            if account_unrealized not in (None, 0.0)
+            else None
+        )
+
+    rows.sort(key=lambda row: abs(row["pnl"]), reverse=True)
+    difference = account_unrealized - summed if account_unrealized is not None else None
+
+    return {
+        "available": True,
+        "reason": None,
+        "currency": currency,
+        "account_unrealized_pl": account_unrealized,
+        "sum_position_unrealized_pl": summed,
+        "reconciliation_difference": difference,
+        "gross_gains": gross_gains,
+        "gross_losses": gross_losses,
+        "largest_contributor": max(rows, key=lambda row: row["pnl"]) if rows else None,
+        "largest_detractor": min(rows, key=lambda row: row["pnl"]) if rows else None,
+        "rows": rows,
+        "accounted_positions": len(rows),
+        "total_positions": len(positions),
+    }
