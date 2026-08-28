@@ -9,6 +9,7 @@ from .config import Settings
 from .db import SnapshotStore
 from .metrics import normalize_account, normalize_position
 from .storage import prune_raw_data
+from .streaming import EventBroker
 from .t212 import Trading212Client, Trading212Error
 
 
@@ -26,9 +27,15 @@ class MonitorState:
 
 
 class MonitorService:
-    def __init__(self, settings: Settings, store: SnapshotStore) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        store: SnapshotStore,
+        events: EventBroker | None = None,
+    ) -> None:
         self.settings = settings
         self.store = store
+        self.events = events
         self.state = MonitorState()
         self._client: Trading212Client | None = None
         self._task: asyncio.Task[None] | None = None
@@ -38,12 +45,17 @@ class MonitorService:
         self._active_alert_keys: set[str] = set()
         self._previous_positions: dict[str, dict[str, Any]] | None = None
 
+    def _publish(self, event: str, data: dict[str, Any]) -> None:
+        if self.events is not None:
+            self.events.publish(event, data)
+
     async def start(self) -> None:
         self._stop.clear()
         try:
             self._client = Trading212Client(self.settings)
         except Exception as exc:
             self.state.last_error = str(exc)
+            self._publish("monitor_error", {"error": self.state.last_error})
             return
         self._task = asyncio.create_task(self._run(), name="t212-monitor")
 
@@ -79,9 +91,25 @@ class MonitorService:
                 self.state.account_rate_limit = account_response.rate_limit
                 self.state.positions_rate_limit = positions_response.rate_limit
 
+                self._publish(
+                    "portfolio",
+                    {
+                        "account": account,
+                        "positions": positions,
+                        "last_sync": now,
+                    },
+                )
+
                 if loop.time() - self._last_snapshot_monotonic >= self.settings.snapshot_seconds:
                     await asyncio.to_thread(self.store.save_snapshot, now, account, positions)
                     self._last_snapshot_monotonic = loop.time()
+                    self._publish(
+                        "snapshot",
+                        {
+                            "ts": now,
+                            "position_count": len(positions),
+                        },
+                    )
 
                 await self._run_storage_maintenance(loop.time())
                 await self._evaluate_alerts(now, account, positions)
@@ -89,6 +117,7 @@ class MonitorService:
                 raise
             except Exception as exc:
                 self.state.last_error = str(exc)
+                self._publish("monitor_error", {"error": self.state.last_error})
 
             elapsed = loop.time() - started
             sleep_for = max(0.2, self.settings.poll_seconds - elapsed)
@@ -115,9 +144,17 @@ class MonitorService:
             self.state.last_maintenance = datetime.now(timezone.utc).isoformat()
             self.state.maintenance_error = None
             self.state.maintenance_deleted_total = int(result.get("deleted_total") or 0)
+            self._publish(
+                "maintenance",
+                {
+                    "ts": self.state.last_maintenance,
+                    "deleted_total": self.state.maintenance_deleted_total,
+                },
+            )
         except Exception as exc:
             # Retention failures must not make portfolio monitoring appear disconnected.
             self.state.maintenance_error = str(exc)
+            self._publish("maintenance_error", {"error": self.state.maintenance_error})
 
     async def _record_position_events(
         self,
@@ -165,6 +202,20 @@ class MonitorService:
                 delta,
                 reference.get("current_price"),
                 reference.get("currency") or "",
+            )
+            self._publish(
+                "position_event",
+                {
+                    "ts": now,
+                    "ticker": ticker,
+                    "name": reference["name"],
+                    "event_type": event_type,
+                    "quantity_before": quantity_before,
+                    "quantity_after": quantity_after,
+                    "delta_quantity": delta,
+                    "current_price": reference.get("current_price"),
+                    "currency": reference.get("currency") or "",
+                },
             )
 
         self._previous_positions = current
@@ -214,6 +265,17 @@ class MonitorService:
                     message,
                     ticker,
                     payload,
+                )
+                self._publish(
+                    "alert",
+                    {
+                        "ts": now,
+                        "severity": severity,
+                        "rule": key.split(":", 1)[0],
+                        "ticker": ticker,
+                        "message": message,
+                        "payload": payload,
+                    },
                 )
 
         self._active_alert_keys = set(triggered)
