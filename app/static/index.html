@@ -186,6 +186,33 @@
       </div>
     </section>
 
+    <section id="brokerActivityPanel" class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Broker activity</h2>
+          <p class="muted">Read-only Trading 212 pending orders, historical orders and transactions</p>
+        </div>
+        <button id="brokerRefresh" class="small-button" type="button">Refresh</button>
+      </div>
+      <div class="broker-tabs" role="tablist" aria-label="Broker activity views">
+        <button class="broker-tab active" type="button" data-view="pending" role="tab">Pending orders</button>
+        <button class="broker-tab" type="button" data-view="history" role="tab">Order history</button>
+        <button class="broker-tab" type="button" data-view="transactions" role="tab">Transactions</button>
+      </div>
+      <div class="table-wrap">
+        <table class="broker-table">
+          <thead id="brokerHead"></thead>
+          <tbody id="brokerBody">
+            <tr><td class="empty">Waiting for broker activity…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="broker-footer">
+        <p id="brokerNote" class="allocation-note muted">This panel only performs GET requests.</p>
+        <button id="brokerLoadMore" class="small-button hidden" type="button">Load more</button>
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -228,5 +255,6 @@
   <script src="/static/drawdown.js" defer></script>
   <script src="/static/comparison.js" defer></script>
   <script src="/static/attribution.js" defer></script>
+  <script src="/static/broker.js" defer></script>
 </body>
 </html>
