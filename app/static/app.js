@@ -4,7 +4,8 @@
     envBadge: $("envBadge"), statusDot: $("statusDot"), statusText: $("statusText"), errorBox: $("errorBox"),
     totalValue: $("totalValue"), invested: $("invested"), cash: $("cash"), unrealized: $("unrealized"),
     unrealizedPct: $("unrealizedPct"), realized: $("realized"), positionCount: $("positionCount"), lastSync: $("lastSync"),
-    positionsBody: $("positionsBody"), filter: $("filter"), historyRange: $("historyRange"), historyChart: $("historyChart"), alerts: $("alerts")
+    positionsBody: $("positionsBody"), filter: $("filter"), historyRange: $("historyRange"), historyChart: $("historyChart"), alerts: $("alerts"),
+    historyTicker: $("historyTicker"), historyMetric: $("historyMetric"), historySubtitle: $("historySubtitle")
   };
 
   let latestPositions = [];
@@ -66,6 +67,27 @@
     return String(value ?? "").replace(/[&<>'"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
   }
 
+  function syncHistoryTickerOptions() {
+    const previous = els.historyTicker.value;
+    if (!latestPositions.length) {
+      els.historyTicker.innerHTML = `<option value="">No positions</option>`;
+      els.historyTicker.disabled = true;
+      return false;
+    }
+
+    const options = latestPositions
+      .slice()
+      .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)))
+      .map((p) => `<option value="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)} — ${escapeHtml(p.name)}</option>`)
+      .join("");
+    els.historyTicker.innerHTML = options;
+    els.historyTicker.disabled = false;
+
+    const stillExists = latestPositions.some((p) => p.ticker === previous);
+    els.historyTicker.value = stillExists ? previous : latestPositions[0].ticker;
+    return previous !== els.historyTicker.value;
+  }
+
   async function refreshLatest() {
     const [status, latest] = await Promise.all([getJSON("/api/status"), getJSON("/api/latest")]);
     els.envBadge.textContent = status.environment;
@@ -97,6 +119,11 @@
     els.positionCount.textContent = String(latestPositions.length);
     els.lastSync.textContent = `Last sync: ${latest.last_sync ? new Date(latest.last_sync).toLocaleString() : "—"}`;
     renderPositions();
+
+    const selectionChanged = syncHistoryTickerOptions();
+    if (selectionChanged) {
+      await refreshHistory();
+    }
   }
 
   async function refreshAlerts() {
@@ -113,12 +140,44 @@
   }
 
   async function refreshHistory() {
+    const ticker = els.historyTicker.value;
+    if (!ticker) {
+      drawHistory([], { metric: els.historyMetric.value, ticker: "", name: "", currency: accountCurrency });
+      return;
+    }
     const hours = Number(els.historyRange.value) || 24;
-    const data = await getJSON(`/api/history?hours=${hours}`);
-    drawHistory(data.items || []);
+    const data = await getJSON(`/api/position-history?ticker=${encodeURIComponent(ticker)}&hours=${hours}`);
+    const items = data.items || [];
+    const latestPosition = latestPositions.find((p) => p.ticker === ticker);
+    const name = items[items.length - 1]?.name || latestPosition?.name || "";
+    const currency = items[items.length - 1]?.currency || latestPosition?.currency || accountCurrency;
+    drawHistory(items, { metric: els.historyMetric.value, ticker, name, currency });
   }
 
-  function drawHistory(items) {
+  function formatMetricValue(value, metric, currency) {
+    if (metric === "pnl_pct") return pct(value);
+    if (metric === "quantity") return number(value, 6);
+    return money(value, currency);
+  }
+
+  function formatAxisValue(value, metric, currency) {
+    if (!Number.isFinite(value)) return "—";
+    if (metric === "pnl_pct") return `${value.toFixed(2)}%`;
+    if (metric === "quantity") return number(value, 4);
+    return money(value, currency);
+  }
+
+  function historyMetricLabel(metric) {
+    return {
+      market_value_local: "Market value",
+      pnl_local: "P/L",
+      pnl_pct: "P/L %",
+      current_price: "Current price",
+      quantity: "Quantity"
+    }[metric] || metric;
+  }
+
+  function drawHistory(items, meta) {
     const canvas = els.historyChart;
     const ctx = canvas.getContext("2d");
     const cssWidth = canvas.clientWidth || 900;
@@ -129,23 +188,32 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-    const values = items.map((x) => Number(x.total_value)).filter(Number.isFinite);
+    const metric = meta.metric || "market_value_local";
+    const values = items.map((x) => Number(x[metric])).filter(Number.isFinite);
+    const label = historyMetricLabel(metric);
+    const title = meta.ticker ? `${meta.ticker}${meta.name ? ` — ${meta.name}` : ""}` : "No position selected";
+    els.historySubtitle.textContent = meta.ticker
+      ? `${title} · ${label}`
+      : "Historical snapshots for the selected holding stored locally in SQLite";
+
+    const border = getComputedStyle(document.documentElement).getPropertyValue("--border");
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent");
+    const muted = getComputedStyle(document.documentElement).getPropertyValue("--muted");
+
     if (values.length < 2) {
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted");
+      ctx.fillStyle = muted;
       ctx.font = "14px system-ui";
-      ctx.fillText("Not enough snapshots yet.", 16, 30);
+      const message = meta.ticker ? "Not enough snapshots yet for this holding." : "No position selected.";
+      ctx.fillText(message, 16, 30);
       return;
     }
 
-    const pad = { l: 58, r: 14, t: 18, b: 28 };
+    const pad = { l: 92, r: 14, t: 18, b: 28 };
     const w = cssWidth - pad.l - pad.r;
     const h = cssHeight - pad.t - pad.b;
     let min = Math.min(...values);
     let max = Math.max(...values);
     if (min === max) { min -= 1; max += 1; }
-    const border = getComputedStyle(document.documentElement).getPropertyValue("--border");
-    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent");
-    const muted = getComputedStyle(document.documentElement).getPropertyValue("--muted");
 
     ctx.strokeStyle = border;
     ctx.lineWidth = 1;
@@ -153,9 +221,27 @@
     ctx.font = "11px system-ui";
     for (let i = 0; i <= 4; i++) {
       const y = pad.t + (h * i / 4);
-      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(cssWidth - pad.r, y); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pad.l, y);
+      ctx.lineTo(cssWidth - pad.r, y);
+      ctx.stroke();
       const value = max - ((max - min) * i / 4);
-      ctx.fillText(number(value, 2), 4, y + 4);
+      const text = formatAxisValue(value, metric, meta.currency);
+      ctx.fillText(text, 4, y + 4);
+    }
+
+    if (metric === "pnl_local" || metric === "pnl_pct") {
+      const zeroInRange = min < 0 && max > 0;
+      if (zeroInRange) {
+        const yZero = pad.t + h - ((0 - min) / (max - min)) * h;
+        ctx.strokeStyle = muted;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.l, yZero);
+        ctx.lineTo(cssWidth - pad.r, yZero);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     ctx.strokeStyle = accent;
@@ -168,20 +254,28 @@
     });
     ctx.stroke();
 
+    const lastValue = items.length ? Number(items[items.length - 1][metric]) : NaN;
+    const summary = `${label}: ${formatMetricValue(lastValue, metric, meta.currency)}`;
+    ctx.fillStyle = muted;
+    ctx.fillText(summary, pad.l, 12);
+
     const firstTs = new Date(items[0].ts).toLocaleString();
     const lastTs = new Date(items[items.length - 1].ts).toLocaleString();
-    ctx.fillStyle = muted;
     ctx.fillText(firstTs, pad.l, cssHeight - 8);
     const width = ctx.measureText(lastTs).width;
     ctx.fillText(lastTs, cssWidth - pad.r - width, cssHeight - 8);
   }
 
   els.filter.addEventListener("input", renderPositions);
-  els.historyRange.addEventListener("change", refreshHistory);
+  els.historyRange.addEventListener("change", () => refreshHistory().catch(() => {}));
+  els.historyTicker.addEventListener("change", () => refreshHistory().catch(() => {}));
+  els.historyMetric.addEventListener("change", () => refreshHistory().catch(() => {}));
   window.addEventListener("resize", () => refreshHistory().catch(() => {}));
 
   async function cycle() {
-    try { await refreshLatest(); } catch (err) {
+    try {
+      await refreshLatest();
+    } catch (err) {
       els.errorBox.textContent = `Dashboard error: ${err.message}`;
       els.errorBox.classList.remove("hidden");
     }
