@@ -34,17 +34,27 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Account history</h2>
-          <p class="muted">Snapshot history stored locally in SQLite</p>
+          <h2>Position history</h2>
+          <p id="historySubtitle" class="muted">Historical snapshots for the selected holding stored locally in SQLite</p>
         </div>
-        <select id="historyRange" aria-label="History range">
-          <option value="1">1h</option>
-          <option value="6">6h</option>
-          <option value="24" selected>24h</option>
-          <option value="168">7d</option>
-        </select>
+        <div class="control-row">
+          <select id="historyTicker" aria-label="Position ticker"></select>
+          <select id="historyMetric" aria-label="Position metric">
+            <option value="market_value_local" selected>Market value</option>
+            <option value="pnl_local">P/L</option>
+            <option value="pnl_pct">P/L %</option>
+            <option value="current_price">Current price</option>
+            <option value="quantity">Quantity</option>
+          </select>
+          <select id="historyRange" aria-label="History range">
+            <option value="1">1h</option>
+            <option value="6">6h</option>
+            <option value="24" selected>24h</option>
+            <option value="168">7d</option>
+          </select>
+        </div>
       </div>
-      <canvas id="historyChart" height="230" aria-label="Portfolio value history"></canvas>
+      <canvas id="historyChart" height="230" aria-label="Position history chart"></canvas>
     </section>
 
     <section class="panel">
