@@ -17,6 +17,7 @@ class Settings:
     poll_seconds: float
     snapshot_seconds: float
     db_path: Path
+    raw_retention_days: int | None
     position_loss_alert_pct: float | None
     total_loss_alert_pct: float | None
 
@@ -32,6 +33,16 @@ def _optional_float(name: str) -> float | None:
     value = float(raw)
     if value < 0:
         raise ValueError(f"{name} must be >= 0")
+    return value
+
+
+def _optional_positive_int(name: str) -> int | None:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    value = int(raw)
+    if value < 1:
+        raise ValueError(f"{name} must be >= 1 when configured")
     return value
 
 
@@ -58,6 +69,7 @@ def load_settings() -> Settings:
         poll_seconds=poll_seconds,
         snapshot_seconds=snapshot_seconds,
         db_path=db_path,
+        raw_retention_days=_optional_positive_int("T212_RAW_RETENTION_DAYS"),
         position_loss_alert_pct=_optional_float("T212_POSITION_LOSS_ALERT_PCT"),
         total_loss_alert_pct=_optional_float("T212_TOTAL_LOSS_ALERT_PCT"),
     )
