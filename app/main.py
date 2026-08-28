@@ -11,6 +11,7 @@ from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
+from .reconciliation import reconcile_position_events
 from .service import MonitorService
 
 settings = load_settings()
@@ -25,7 +26,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.6.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.7.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -67,6 +68,33 @@ def api_position_history(
 @app.get("/api/position-events")
 def api_position_events(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
     return {"items": store.position_events(limit=limit)}
+
+
+@app.get("/api/reconciliation")
+async def api_reconciliation(
+    event_limit: int = Query(default=50, ge=1, le=200),
+    tolerance_seconds: int = Query(default=180, ge=30, le=900),
+) -> dict[str, object]:
+    events = store.position_events(limit=event_limit)
+    history = await monitor.historical_orders(limit=50)
+    if not history.get("available"):
+        return {
+            "available": False,
+            "error": history.get("error") or "Historical orders are unavailable",
+            "status_code": history.get("status_code"),
+            "items": [],
+        }
+
+    result = reconcile_position_events(
+        events,
+        history.get("items") or [],
+        tolerance_seconds=tolerance_seconds,
+    )
+    return {
+        "available": True,
+        "error": None,
+        **result,
+    }
 
 
 @app.get("/api/drawdown")
