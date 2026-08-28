@@ -192,6 +192,41 @@ class SnapshotStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def position_events_since(
+        self,
+        hours: int = 24,
+        ticker: str | None = None,
+        limit: int = 100000,
+    ) -> list[dict[str, Any]]:
+        hours = min(max(hours, 1), 24 * 30)
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        with self._connect() as conn:
+            if ticker:
+                rows = conn.execute(
+                    """
+                    SELECT id, ts, ticker, name, event_type, quantity_before,
+                           quantity_after, delta_quantity, current_price, currency
+                    FROM position_events
+                    WHERE ts >= ? AND ticker = ?
+                    ORDER BY ts ASC, id ASC
+                    LIMIT ?
+                    """,
+                    (cutoff, ticker, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, ts, ticker, name, event_type, quantity_before,
+                           quantity_after, delta_quantity, current_price, currency
+                    FROM position_events
+                    WHERE ts >= ?
+                    ORDER BY ts ASC, id ASC
+                    LIMIT ?
+                    """,
+                    (cutoff, limit),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
     def add_alert(
         self,
         ts: str,
