@@ -15,6 +15,7 @@ from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .quality import evaluate_data_quality
 from .reconciliation import reconcile_position_events
 from .service import MonitorService
+from .storage import database_status
 
 settings = load_settings()
 store = SnapshotStore(settings.db_path)
@@ -28,7 +29,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.9.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="2.0.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -47,6 +48,16 @@ def healthz() -> dict[str, object]:
 @app.get("/api/status")
 def api_status() -> dict[str, object]:
     return monitor.status()
+
+
+@app.get("/api/storage")
+def api_storage() -> dict[str, object]:
+    return {
+        **database_status(settings.db_path, settings.raw_retention_days),
+        "last_maintenance": monitor.state.last_maintenance,
+        "maintenance_error": monitor.state.maintenance_error,
+        "maintenance_deleted_total": monitor.state.maintenance_deleted_total,
+    }
 
 
 @app.get("/api/latest")
