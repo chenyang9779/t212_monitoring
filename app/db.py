@@ -56,6 +56,25 @@ class SnapshotStore:
                 CREATE INDEX IF NOT EXISTS idx_position_snapshots_ticker_ts
                 ON position_snapshots (ticker, ts DESC);
 
+                CREATE TABLE IF NOT EXISTS position_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    quantity_before REAL NOT NULL,
+                    quantity_after REAL NOT NULL,
+                    delta_quantity REAL NOT NULL,
+                    current_price REAL,
+                    currency TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_position_events_ts
+                ON position_events (ts DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_position_events_ticker_ts
+                ON position_events (ticker, ts DESC);
+
                 CREATE TABLE IF NOT EXISTS alerts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ts TEXT NOT NULL,
@@ -124,6 +143,54 @@ class SnapshotStore:
                     for p in positions
                 ],
             )
+
+    def add_position_event(
+        self,
+        ts: str,
+        ticker: str,
+        name: str,
+        event_type: str,
+        quantity_before: float,
+        quantity_after: float,
+        delta_quantity: float,
+        current_price: float | None,
+        currency: str,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO position_events (
+                    ts, ticker, name, event_type, quantity_before,
+                    quantity_after, delta_quantity, current_price, currency
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ts,
+                    ticker,
+                    name,
+                    event_type,
+                    quantity_before,
+                    quantity_after,
+                    delta_quantity,
+                    current_price,
+                    currency,
+                ),
+            )
+
+    def position_events(self, limit: int = 100) -> list[dict[str, Any]]:
+        limit = min(max(limit, 1), 500)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, ts, ticker, name, event_type, quantity_before,
+                       quantity_after, delta_quantity, current_price, currency
+                FROM position_events
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def add_alert(
         self,
