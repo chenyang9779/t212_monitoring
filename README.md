@@ -11,6 +11,7 @@ A read-only Trading 212 portfolio monitor designed so a strategy/execution layer
 - Provides allocation, drawdown, normalized position comparison, and P/L attribution views.
 - Exposes read-only pending orders, historical orders, and transactions when the API key has those permissions.
 - Stores sampled position marks in a separate market-data table for downstream analytics.
+- Exposes CSV and JSONL download endpoints for downstream notebooks and services.
 - Contains no order-placement code.
 
 ## Security model
@@ -52,11 +53,14 @@ T212_ENV=demo
 T212_POLL_SECONDS=6
 T212_SNAPSHOT_SECONDS=30
 T212_DB_PATH=data/monitor.db
+T212_RAW_RETENTION_DAYS=
 T212_POSITION_LOSS_ALERT_PCT=
 T212_TOTAL_LOSS_ALERT_PCT=
 ```
 
 Alert thresholds are disabled when blank. Example: a value of `8` means an alert is recorded when unrealized return is `<= -8%`.
+
+`T212_RAW_RETENTION_DAYS` is also disabled when blank. When configured, the monitor periodically removes older account snapshots, position snapshots, and sampled market quotes while keeping low-volume audit data such as position events and alerts.
 
 The poll interval must be at least five seconds because the account-summary endpoint is rate-limited more strictly than the positions endpoint.
 
@@ -66,10 +70,14 @@ Core monitoring:
 
 - `GET /healthz`
 - `GET /api/status`
+- `GET /api/storage`
 - `GET /api/latest`
 - `GET /api/history?hours=24`
 - `GET /api/position-history?ticker=...&hours=24`
 - `GET /api/position-events?limit=100`
+- `GET /api/position-lifecycles?event_limit=500`
+- `GET /api/data-quality?hours=24`
+- `GET /api/reconciliation?event_limit=50&tolerance_seconds=180`
 - `GET /api/drawdown?hours=24[&ticker=...]`
 - `GET /api/pnl-attribution`
 - `GET /api/alerts?limit=50`
@@ -87,6 +95,37 @@ Stored market-data interface:
 - `GET /api/market/bars?ticker=...&hours=24&minutes=5`
 
 Supported sampled-bar intervals are `1, 5, 15, 30, 60, 240, 1440` minutes.
+
+## Export API
+
+All export endpoints are read-only and accept `format=csv` or `format=jsonl`. CSV is the default. Responses include `Content-Disposition` and an `X-Export-Rows` header.
+
+Local datasets:
+
+- `GET /api/export/positions?format=csv`
+- `GET /api/export/account-history?hours=24&format=csv`
+- `GET /api/export/position-history?ticker=...&hours=24&format=csv`
+- `GET /api/export/position-events?limit=500&format=csv`
+- `GET /api/export/alerts?limit=500&format=jsonl`
+- `GET /api/export/market-quotes?ticker=...&hours=24&format=csv`
+- `GET /api/export/market-bars?ticker=...&hours=24&minutes=5&format=csv`
+
+Broker-backed datasets:
+
+- `GET /api/export/orders/history?limit=50&format=csv`
+- `GET /api/export/transactions?limit=50&format=csv`
+
+Broker-backed exports intentionally fetch at most one Trading 212 history page per request. If more broker pages exist, the response includes `X-Export-Has-More: true`. This prevents a single download request from recursively consuming the broker history rate limit.
+
+Nested broker payloads are flattened into dotted CSV columns such as `order.ticker`. JSONL retains one JSON object per line. CSV string values that begin with spreadsheet formula prefixes are escaped to reduce formula-injection risk when files are opened in Excel or similar software.
+
+Examples:
+
+```bash
+curl -OJ "http://127.0.0.1:8000/api/export/positions"
+curl -OJ "http://127.0.0.1:8000/api/export/account-history?hours=168&format=csv"
+curl -OJ "http://127.0.0.1:8000/api/export/market-bars?ticker=AAPL_US_EQ&hours=168&minutes=5&format=jsonl"
+```
 
 ## Market-data model
 
@@ -128,6 +167,6 @@ quant_service
     └── optional execution adapter
 ```
 
-For a local prototype, the quant service can open `data/monitor.db` in SQLite read-only mode. For a cleaner long-term boundary, prefer consuming the monitor's HTTP API (or exporting data to a dedicated analytical store) so the quant service does not depend on this repository's SQLite schema.
+For a local prototype, the quant service can open `data/monitor.db` in SQLite read-only mode. For a cleaner long-term boundary, prefer consuming the monitor's HTTP API or export endpoints so the quant service does not depend on this repository's SQLite schema.
 
 The monitor must never depend on the quant service to keep collecting broker state. The dependency should be one-way: quant reads monitoring data; monitoring does not import strategy code.
