@@ -104,6 +104,28 @@
       <div class="table-wrap"><table><thead><tr><th>Instrument</th><th class="num">Qty</th><th class="num">Avg</th><th class="num">Current</th><th class="num">Value</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="positionsBody"><tr><td colspan="7" class="empty">Waiting for data…</td></tr></tbody></table></div>
     </section>
 
+    <section id="exposurePanel" class="panel">
+      <div class="panel-heading">
+        <div><h2>Instrument metadata & exposure</h2><p class="muted">Exposure by broker instrument type and quoted currency using account-currency position values</p></div>
+        <button id="exposureRefresh" class="small-button" type="button">Refresh metadata</button>
+      </div>
+      <div class="exposure-summary">
+        <div><span>Metadata coverage</span><strong id="exposureCoverage">—</strong></div>
+        <div><span>Invested value</span><strong id="exposureInvested">—</strong></div>
+      </div>
+      <div class="exposure-grid">
+        <div>
+          <h3>Quoted currency</h3>
+          <div id="exposureCurrencies" class="exposure-list"><div class="empty">Waiting for exposure data…</div></div>
+        </div>
+        <div>
+          <h3>Instrument type</h3>
+          <div id="exposureTypes" class="exposure-list"><div class="empty">Waiting for exposure data…</div></div>
+        </div>
+      </div>
+      <p id="exposureNote" class="allocation-note muted"></p>
+    </section>
+
     <section id="qualityPanel" class="panel">
       <div class="panel-heading">
         <div><h2>Data quality & integrity</h2><p class="muted">Snapshot continuity, freshness, quote coverage and account/position valuation checks</p></div>
@@ -175,6 +197,7 @@
   <script src="/static/drawdown.js" defer></script>
   <script src="/static/comparison.js" defer></script>
   <script src="/static/attribution.js" defer></script>
+  <script src="/static/exposure.js" defer></script>
   <script src="/static/quality.js" defer></script>
   <script src="/static/storage.js" defer></script>
   <script src="/static/broker.js" defer></script>
