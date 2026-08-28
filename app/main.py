@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
+from .export_routes import build_export_router
 from .lifecycle import build_position_lifecycles
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .quality import evaluate_data_quality
@@ -29,9 +30,10 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="2.1.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.include_router(build_export_router(store, monitor))
 
 
 @app.get("/")
