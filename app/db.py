@@ -252,7 +252,7 @@ class SnapshotStore:
                 ),
             )
 
-    def history(self, hours: int = 24, limit: int = 1500) -> list[dict[str, Any]]:
+    def history(self, hours: int = 24, limit: int = 25000) -> list[dict[str, Any]]:
         hours = min(max(hours, 1), 24 * 30)
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
         with self._connect() as conn:
@@ -274,7 +274,7 @@ class SnapshotStore:
         self,
         ticker: str,
         hours: int = 24,
-        limit: int = 1500,
+        limit: int = 25000,
     ) -> list[dict[str, Any]]:
         hours = min(max(hours, 1), 24 * 30)
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
