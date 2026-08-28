@@ -13,6 +13,7 @@ def _number(value: Any) -> float | None:
 
 def normalize_position(position: dict[str, Any]) -> dict[str, Any]:
     instrument = position.get("instrument") or {}
+    wallet_impact = position.get("walletImpact") or {}
     quantity = _number(position.get("quantity")) or 0.0
     average_price = _number(position.get("averagePricePaid"))
     current_price = _number(position.get("currentPrice"))
@@ -30,6 +31,15 @@ def normalize_position(position: dict[str, Any]) -> dict[str, Any]:
         else None
     )
 
+    wallet_total_cost = _number(wallet_impact.get("totalCost"))
+    wallet_current_value = _number(wallet_impact.get("currentValue"))
+    wallet_unrealized_pl = _number(wallet_impact.get("unrealizedProfitLoss"))
+    wallet_pnl_pct = (
+        (wallet_unrealized_pl / abs(wallet_total_cost)) * 100.0
+        if wallet_unrealized_pl is not None and wallet_total_cost not in (None, 0)
+        else None
+    )
+
     return {
         "ticker": instrument.get("ticker") or position.get("ticker") or "UNKNOWN",
         "name": instrument.get("name") or instrument.get("ticker") or "Unknown instrument",
@@ -44,8 +54,14 @@ def normalize_position(position: dict[str, Any]) -> dict[str, Any]:
         "market_value_local": market_value_local,
         "pnl_local": pnl_local,
         "pnl_pct": pnl_pct,
+        "wallet_currency": wallet_impact.get("currency") or "",
+        "wallet_total_cost": wallet_total_cost,
+        "wallet_current_value": wallet_current_value,
+        "wallet_unrealized_pl": wallet_unrealized_pl,
+        "wallet_fx_impact": _number(wallet_impact.get("fxImpact")),
+        "wallet_pnl_pct": wallet_pnl_pct,
         "opened_at": position.get("createdAt"),
-        "wallet_impact": position.get("walletImpact") or {},
+        "wallet_impact": wallet_impact,
         "raw": position,
     }
 
