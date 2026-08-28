@@ -104,6 +104,24 @@
       <div class="table-wrap"><table><thead><tr><th>Instrument</th><th class="num">Qty</th><th class="num">Avg</th><th class="num">Current</th><th class="num">Value</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="positionsBody"><tr><td colspan="7" class="empty">Waiting for data…</td></tr></tbody></table></div>
     </section>
 
+    <section id="qualityPanel" class="panel">
+      <div class="panel-heading">
+        <div><h2>Data quality & integrity</h2><p class="muted">Snapshot continuity, freshness, quote coverage and account/position valuation checks</p></div>
+        <div class="control-row">
+          <select id="qualityRange" aria-label="Data-quality range"><option value="1">1h</option><option value="6">6h</option><option value="24" selected>24h</option><option value="168">7d</option></select>
+          <button id="qualityRefresh" class="small-button" type="button">Check now</button>
+        </div>
+      </div>
+      <div class="quality-summary">
+        <div><span>Status</span><strong id="qualityStatus" class="quality-state">—</strong></div>
+        <div><span>Issues</span><strong id="qualityWarnings">—</strong></div>
+        <div><span>Snapshot gaps</span><strong id="qualityGaps">—</strong></div>
+        <div><span>Continuity</span><strong id="qualityContinuity">—</strong></div>
+      </div>
+      <div id="qualityIssues" class="quality-issues"><div class="empty">Waiting for data-quality diagnostics…</div></div>
+      <p id="qualityNote" class="allocation-note muted"></p>
+    </section>
+
     <section id="brokerActivityPanel" class="panel">
       <div class="panel-heading"><div><h2>Broker activity</h2><p class="muted">Read-only Trading 212 pending orders, historical orders and transactions</p></div><button id="brokerRefresh" class="small-button" type="button">Refresh</button></div>
       <div class="broker-tabs" role="tablist" aria-label="Broker activity views"><button class="broker-tab active" type="button" data-view="pending" role="tab">Pending orders</button><button class="broker-tab" type="button" data-view="history" role="tab">Order history</button><button class="broker-tab" type="button" data-view="transactions" role="tab">Transactions</button></div>
@@ -137,6 +155,7 @@
   <script src="/static/drawdown.js" defer></script>
   <script src="/static/comparison.js" defer></script>
   <script src="/static/attribution.js" defer></script>
+  <script src="/static/quality.js" defer></script>
   <script src="/static/broker.js" defer></script>
   <script src="/static/reconciliation.js" defer></script>
   <script src="/static/lifecycle.js" defer></script>
