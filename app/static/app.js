@@ -12,6 +12,7 @@
   let accountCurrency = "";
   let selectedHistoryTicker = "";
   let historyRequestId = 0;
+  const OVERALL_TICKER = "__ALL__";
 
   function money(value, currency) {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -70,38 +71,44 @@
   }
 
   function syncHistoryTickerOptions() {
-    if (!latestPositions.length) {
-      els.historyTicker.innerHTML = `<option value="">No positions</option>`;
-      els.historyTicker.disabled = true;
-      selectedHistoryTicker = "";
-      return false;
-    }
-
     const sortedPositions = latestPositions
       .slice()
       .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)));
-    const availableTickers = new Set(sortedPositions.map((p) => p.ticker));
+    const availableTickers = new Set([OVERALL_TICKER, ...sortedPositions.map((p) => p.ticker)]);
     const previous = availableTickers.has(selectedHistoryTicker)
       ? selectedHistoryTicker
       : (availableTickers.has(els.historyTicker.value) ? els.historyTicker.value : "");
 
     const currentTickers = Array.from(els.historyTicker.options).map((option) => option.value);
-    const nextTickers = sortedPositions.map((p) => p.ticker);
+    const nextTickers = [OVERALL_TICKER, ...sortedPositions.map((p) => p.ticker)];
     const optionsChanged = currentTickers.length !== nextTickers.length
       || currentTickers.some((ticker, index) => ticker !== nextTickers[index]);
 
     if (optionsChanged) {
-      els.historyTicker.innerHTML = sortedPositions
-        .map((p) => `<option value="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)} — ${escapeHtml(p.name)}</option>`)
-        .join("");
+      els.historyTicker.innerHTML = [
+        `<option value="${OVERALL_TICKER}">Overall positions</option>`,
+        ...sortedPositions.map((p) => `<option value="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)} — ${escapeHtml(p.name)}</option>`)
+      ].join("");
     }
 
     els.historyTicker.disabled = false;
-    const nextSelection = previous || sortedPositions[0].ticker;
+    const nextSelection = previous || OVERALL_TICKER;
     const selectionChanged = selectedHistoryTicker !== nextSelection;
     selectedHistoryTicker = nextSelection;
     els.historyTicker.value = selectedHistoryTicker;
+    updateHistoryMetricAvailability();
     return selectionChanged;
+  }
+
+  function updateHistoryMetricAvailability() {
+    const isOverall = selectedHistoryTicker === OVERALL_TICKER;
+    for (const value of ["current_price", "quantity"]) {
+      const option = els.historyMetric.querySelector(`option[value="${value}"]`);
+      if (option) option.disabled = isOverall;
+    }
+    if (isOverall && ["current_price", "quantity"].includes(els.historyMetric.value)) {
+      els.historyMetric.value = "market_value_local";
+    }
   }
 
   async function refreshLatest() {
@@ -165,6 +172,28 @@
     const requestId = ++historyRequestId;
     const hours = Number(els.historyRange.value) || 24;
     const metric = els.historyMetric.value;
+
+    if (ticker === OVERALL_TICKER) {
+      const data = await getJSON(`/api/history?hours=${hours}`);
+      if (requestId !== historyRequestId || ticker !== selectedHistoryTicker) return;
+
+      const items = (data.items || []).map((item) => ({
+        ts: item.ts,
+        market_value_local: item.investments_current_value,
+        pnl_local: item.unrealized_pl,
+        pnl_pct: item.unrealized_pl_pct
+      }));
+      const currency = data.items?.[data.items.length - 1]?.currency || accountCurrency;
+      drawHistory(items, {
+        metric,
+        ticker: OVERALL_TICKER,
+        name: "Overall positions",
+        currency,
+        overall: true
+      });
+      return;
+    }
+
     const data = await getJSON(`/api/position-history?ticker=${encodeURIComponent(ticker)}&hours=${hours}`);
 
     // Ignore stale responses if the user switches positions while a request is in flight.
@@ -214,7 +243,9 @@
     const metric = meta.metric || "market_value_local";
     const values = items.map((x) => Number(x[metric])).filter(Number.isFinite);
     const label = historyMetricLabel(metric);
-    const title = meta.ticker ? `${meta.ticker}${meta.name ? ` — ${meta.name}` : ""}` : "No position selected";
+    const title = meta.overall
+      ? "Overall positions"
+      : (meta.ticker ? `${meta.ticker}${meta.name ? ` — ${meta.name}` : ""}` : "No position selected");
     els.historySubtitle.textContent = meta.ticker
       ? `${title} · ${label}`
       : "Historical snapshots for the selected holding stored locally in SQLite";
@@ -293,6 +324,7 @@
   els.historyRange.addEventListener("change", () => refreshHistory().catch(() => {}));
   els.historyTicker.addEventListener("change", () => {
     selectedHistoryTicker = els.historyTicker.value;
+    updateHistoryMetricAvailability();
     refreshHistory().catch((err) => {
       els.errorBox.textContent = `Position history error: ${err.message}`;
       els.errorBox.classList.remove("hidden");
