@@ -78,6 +78,12 @@ td { font-size: 14px; }
 .comparison-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 10px; color: var(--muted); font-size: 12px; }
 .comparison-legend-item { display: inline-flex; align-items: center; gap: 7px; }
 .comparison-swatch { width: 18px; height: 3px; border-radius: 999px; display: inline-block; }
+.broker-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.broker-tab { min-height: 34px; padding: 6px 10px; font-size: 13px; }
+.broker-tab.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
+.broker-table { min-width: 980px; }
+.broker-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.broker-footer .allocation-note { margin-bottom: 0; }
 .alerts { display: grid; gap: 8px; }
 .alert { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .alert-severity { font-size: 11px; text-transform: uppercase; color: var(--warn); }
@@ -107,4 +113,6 @@ td { font-size: 14px; }
   .allocation-row { grid-template-columns: 1fr auto; gap: 8px 12px; }
   .allocation-bar-wrap { grid-column: 1 / -1; grid-row: 2; }
   .allocation-value { grid-column: 2; grid-row: 1; }
+  .broker-footer { align-items: stretch; flex-direction: column; }
+  .broker-footer button { width: 100%; }
 }
