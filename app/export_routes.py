@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from .db import SnapshotStore
+from .export_history import account_history_all, position_history_all
 from .exporting import export_response, flatten_record
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .service import MonitorService
@@ -46,7 +47,7 @@ def build_export_router(store: SnapshotStore, monitor: MonitorService) -> APIRou
         format: str = Query(default="csv", pattern="^(csv|jsonl)$"),
     ):
         return export_response(
-            store.history(hours=hours),
+            account_history_all(store.path, hours=hours),
             f"account_history_{hours}h",
             format,
         )
@@ -58,7 +59,7 @@ def build_export_router(store: SnapshotStore, monitor: MonitorService) -> APIRou
         format: str = Query(default="csv", pattern="^(csv|jsonl)$"),
     ):
         return export_response(
-            store.position_history(ticker=ticker, hours=hours),
+            position_history_all(store.path, ticker=ticker, hours=hours),
             f"position_history_{ticker}_{hours}h",
             format,
         )
