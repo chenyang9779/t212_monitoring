@@ -32,72 +32,99 @@
       <article class="card"><span>Open positions</span><strong id="positionCount">—</strong></article>
     </section>
 
-    <section id="allocationPanel" class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Allocation & concentration</h2>
-          <p class="muted">Position weights in the Trading 212 account currency</p>
+    <div class="analytics-grid">
+      <section id="allocationPanel" class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Allocation & concentration</h2>
+            <p class="muted">Position weights in the Trading 212 account currency</p>
+          </div>
         </div>
-      </div>
-      <div class="allocation-summary" aria-label="Allocation summary">
-        <div><span>Invested value</span><strong id="allocationTotal">—</strong></div>
-        <div><span>Top 1 concentration</span><strong id="allocationTop1">—</strong></div>
-        <div><span>Top 3 concentration</span><strong id="allocationTop3">—</strong></div>
-      </div>
-      <div id="allocationBody" class="allocation-list"><div class="empty">Waiting for allocation data…</div></div>
-      <p id="allocationNote" class="allocation-note muted"></p>
-    </section>
+        <div class="allocation-summary" aria-label="Allocation summary">
+          <div><span>Invested value</span><strong id="allocationTotal">—</strong></div>
+          <div><span>Top 1 concentration</span><strong id="allocationTop1">—</strong></div>
+          <div><span>Top 3 concentration</span><strong id="allocationTop3">—</strong></div>
+        </div>
+        <div id="allocationBody" class="allocation-list"><div class="empty">Waiting for allocation data…</div></div>
+        <p id="allocationNote" class="allocation-note muted"></p>
+      </section>
 
-    <section id="drawdownPanel" class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Drawdown</h2>
-          <p id="drawdownSubtitle" class="muted">Return drawdown, reset when position size changes</p>
+      <section id="drawdownPanel" class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Drawdown</h2>
+            <p id="drawdownSubtitle" class="muted">Return drawdown, reset when position size changes</p>
+          </div>
+          <div class="control-row">
+            <select id="drawdownTicker" aria-label="Drawdown scope"></select>
+            <select id="drawdownRange" aria-label="Drawdown range">
+              <option value="1">1h</option>
+              <option value="6">6h</option>
+              <option value="24" selected>24h</option>
+              <option value="168">7d</option>
+            </select>
+          </div>
         </div>
-        <div class="control-row">
-          <select id="drawdownTicker" aria-label="Drawdown scope"></select>
-          <select id="drawdownRange" aria-label="Drawdown range">
-            <option value="1">1h</option>
-            <option value="6">6h</option>
-            <option value="24" selected>24h</option>
-            <option value="168">7d</option>
-          </select>
+        <div class="drawdown-summary" aria-label="Drawdown summary">
+          <div><span>Current drawdown</span><strong id="drawdownCurrent">—</strong></div>
+          <div><span>Max drawdown</span><strong id="drawdownMax">—</strong></div>
+          <div><span>Peak return</span><strong id="drawdownPeak">—</strong></div>
+          <div><span>Current return</span><strong id="drawdownReturn">—</strong></div>
         </div>
-      </div>
-      <div class="drawdown-summary" aria-label="Drawdown summary">
-        <div><span>Current drawdown</span><strong id="drawdownCurrent">—</strong></div>
-        <div><span>Max drawdown</span><strong id="drawdownMax">—</strong></div>
-        <div><span>Peak return</span><strong id="drawdownPeak">—</strong></div>
-        <div><span>Current return</span><strong id="drawdownReturn">—</strong></div>
-      </div>
-      <p id="drawdownNote" class="allocation-note muted">Drawdown is computed from unrealized-return snapshots, not raw market value.</p>
-    </section>
+        <p id="drawdownNote" class="allocation-note muted">Drawdown is computed from unrealized-return snapshots, not raw market value.</p>
+      </section>
+    </div>
 
-    <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Position history</h2>
-          <p id="historySubtitle" class="muted">Historical snapshots for the selected holding stored locally in SQLite</p>
+    <div class="charts-grid">
+      <section id="comparisonPanel" class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Position comparison</h2>
+            <p class="muted">Current-price snapshots rebased to 0% at the start of the selected window</p>
+          </div>
+          <div class="control-row">
+            <button id="comparisonSelectAll" class="small-button" type="button">Select all</button>
+            <button id="comparisonClear" class="small-button" type="button">Clear</button>
+            <select id="comparisonRange" aria-label="Comparison range">
+              <option value="1">1h</option>
+              <option value="6">6h</option>
+              <option value="24" selected>24h</option>
+              <option value="168">7d</option>
+            </select>
+          </div>
         </div>
-        <div class="control-row">
-          <select id="historyTicker" aria-label="Position ticker"></select>
-          <select id="historyMetric" aria-label="Position metric">
-            <option value="market_value_local" selected>Market value</option>
-            <option value="pnl_local">P/L</option>
-            <option value="pnl_pct">P/L %</option>
-            <option value="current_price">Current price</option>
-            <option value="quantity">Quantity</option>
-          </select>
-          <select id="historyRange" aria-label="History range">
-            <option value="1">1h</option>
-            <option value="6">6h</option>
-            <option value="24" selected>24h</option>
-            <option value="168">7d</option>
-          </select>
+        <div id="comparisonTickers" class="comparison-tickers" aria-label="Positions to compare"></div>
+        <canvas id="comparisonChart" height="260" aria-label="Normalized position comparison chart"></canvas>
+        <div id="comparisonLegend" class="comparison-legend"></div>
+        <p id="comparisonNote" class="allocation-note muted">Waiting for position history…</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Position history</h2>
+            <p id="historySubtitle" class="muted">Historical snapshots for the selected holding stored locally in SQLite</p>
+          </div>
+          <div class="control-row">
+            <select id="historyTicker" aria-label="Position ticker"></select>
+            <select id="historyMetric" aria-label="Position metric">
+              <option value="market_value_local" selected>Market value</option>
+              <option value="pnl_local">P/L</option>
+              <option value="pnl_pct">P/L %</option>
+              <option value="current_price">Current price</option>
+              <option value="quantity">Quantity</option>
+            </select>
+            <select id="historyRange" aria-label="History range">
+              <option value="1">1h</option>
+              <option value="6">6h</option>
+              <option value="24" selected>24h</option>
+              <option value="168">7d</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <canvas id="historyChart" height="230" aria-label="Position history chart"></canvas>
-    </section>
+        <canvas id="historyChart" height="260" aria-label="Position history chart"></canvas>
+      </section>
+    </div>
 
     <section class="panel">
       <div class="panel-heading">
@@ -167,5 +194,6 @@
   <script src="/static/app.js" defer></script>
   <script src="/static/allocation.js" defer></script>
   <script src="/static/drawdown.js" defer></script>
+  <script src="/static/comparison.js" defer></script>
 </body>
 </html>
