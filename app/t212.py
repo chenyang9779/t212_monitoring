@@ -4,6 +4,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qsl, urlparse
 
 import httpx
 
@@ -11,13 +12,29 @@ from .config import Settings
 
 
 class Trading212Error(RuntimeError):
-    pass
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
 class ApiResponse:
     data: Any
     rate_limit: dict[str, str]
+
+
+def _pagination_params(next_page_path: str, expected_path: str) -> dict[str, str]:
+    """Validate a Trading 212 nextPagePath and return only its query parameters."""
+
+    parsed = urlparse(next_page_path)
+    if parsed.scheme or parsed.netloc or parsed.fragment:
+        raise Trading212Error("Invalid Trading 212 pagination path")
+
+    accepted_paths = {expected_path, f"/api/v0{expected_path}"}
+    if parsed.path not in accepted_paths:
+        raise Trading212Error("Trading 212 pagination path does not match the requested endpoint")
+
+    return dict(parse_qsl(parsed.query, keep_blank_values=False))
 
 
 class Trading212Client:
@@ -38,8 +55,12 @@ class Trading212Client:
     async def close(self) -> None:
         await self._client.aclose()
 
-    async def _get(self, path: str) -> ApiResponse:
-        response = await self._client.get(path)
+    async def _get(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> ApiResponse:
+        response = await self._client.get(path, params=params)
         if response.status_code == 429:
             reset = response.headers.get("x-ratelimit-reset")
             if reset:
@@ -49,14 +70,18 @@ class Trading212Client:
                         await asyncio.sleep(wait)
                 except ValueError:
                     pass
-            raise Trading212Error("Trading 212 rate limit reached (HTTP 429)")
+            raise Trading212Error("Trading 212 rate limit reached (HTTP 429)", 429)
         if response.status_code in {401, 403}:
             raise Trading212Error(
-                f"Trading 212 authentication/permission error (HTTP {response.status_code})"
+                f"Trading 212 authentication/permission error (HTTP {response.status_code})",
+                response.status_code,
             )
         if response.is_error:
             body = response.text[:500]
-            raise Trading212Error(f"Trading 212 API error {response.status_code}: {body}")
+            raise Trading212Error(
+                f"Trading 212 API error {response.status_code}: {body}",
+                response.status_code,
+            )
 
         rate_limit = {
             key: value
@@ -70,3 +95,34 @@ class Trading212Client:
 
     async def get_positions(self) -> ApiResponse:
         return await self._get("/equity/positions")
+
+    async def get_pending_orders(self) -> ApiResponse:
+        return await self._get("/equity/orders")
+
+    async def get_historical_orders(
+        self,
+        limit: int = 50,
+        ticker: str | None = None,
+        next_page_path: str | None = None,
+    ) -> ApiResponse:
+        path = "/equity/history/orders"
+        if next_page_path:
+            params: dict[str, Any] = _pagination_params(next_page_path, path)
+        else:
+            params = {"limit": min(max(limit, 1), 50)}
+            if ticker:
+                params["ticker"] = ticker
+        return await self._get(path, params=params)
+
+    async def get_transactions(
+        self,
+        limit: int = 50,
+        next_page_path: str | None = None,
+    ) -> ApiResponse:
+        path = "/equity/history/transactions"
+        params: dict[str, Any]
+        if next_page_path:
+            params = _pagination_params(next_page_path, path)
+        else:
+            params = {"limit": min(max(limit, 1), 50)}
+        return await self._get(path, params=params)
