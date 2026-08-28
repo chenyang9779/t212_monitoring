@@ -10,6 +10,8 @@
 
   let latestPositions = [];
   let accountCurrency = "";
+  let selectedHistoryTicker = "";
+  let historyRequestId = 0;
 
   function money(value, currency) {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -68,24 +70,38 @@
   }
 
   function syncHistoryTickerOptions() {
-    const previous = els.historyTicker.value;
     if (!latestPositions.length) {
       els.historyTicker.innerHTML = `<option value="">No positions</option>`;
       els.historyTicker.disabled = true;
+      selectedHistoryTicker = "";
       return false;
     }
 
-    const options = latestPositions
+    const sortedPositions = latestPositions
       .slice()
-      .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)))
-      .map((p) => `<option value="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)} — ${escapeHtml(p.name)}</option>`)
-      .join("");
-    els.historyTicker.innerHTML = options;
-    els.historyTicker.disabled = false;
+      .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)));
+    const availableTickers = new Set(sortedPositions.map((p) => p.ticker));
+    const previous = availableTickers.has(selectedHistoryTicker)
+      ? selectedHistoryTicker
+      : (availableTickers.has(els.historyTicker.value) ? els.historyTicker.value : "");
 
-    const stillExists = latestPositions.some((p) => p.ticker === previous);
-    els.historyTicker.value = stillExists ? previous : latestPositions[0].ticker;
-    return previous !== els.historyTicker.value;
+    const currentTickers = Array.from(els.historyTicker.options).map((option) => option.value);
+    const nextTickers = sortedPositions.map((p) => p.ticker);
+    const optionsChanged = currentTickers.length !== nextTickers.length
+      || currentTickers.some((ticker, index) => ticker !== nextTickers[index]);
+
+    if (optionsChanged) {
+      els.historyTicker.innerHTML = sortedPositions
+        .map((p) => `<option value="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)} — ${escapeHtml(p.name)}</option>`)
+        .join("");
+    }
+
+    els.historyTicker.disabled = false;
+    const nextSelection = previous || sortedPositions[0].ticker;
+    const selectionChanged = selectedHistoryTicker !== nextSelection;
+    selectedHistoryTicker = nextSelection;
+    els.historyTicker.value = selectedHistoryTicker;
+    return selectionChanged;
   }
 
   async function refreshLatest() {
@@ -140,18 +156,25 @@
   }
 
   async function refreshHistory() {
-    const ticker = els.historyTicker.value;
+    const ticker = selectedHistoryTicker || els.historyTicker.value;
     if (!ticker) {
       drawHistory([], { metric: els.historyMetric.value, ticker: "", name: "", currency: accountCurrency });
       return;
     }
+
+    const requestId = ++historyRequestId;
     const hours = Number(els.historyRange.value) || 24;
+    const metric = els.historyMetric.value;
     const data = await getJSON(`/api/position-history?ticker=${encodeURIComponent(ticker)}&hours=${hours}`);
+
+    // Ignore stale responses if the user switches positions while a request is in flight.
+    if (requestId !== historyRequestId || ticker !== selectedHistoryTicker) return;
+
     const items = data.items || [];
     const latestPosition = latestPositions.find((p) => p.ticker === ticker);
     const name = items[items.length - 1]?.name || latestPosition?.name || "";
     const currency = items[items.length - 1]?.currency || latestPosition?.currency || accountCurrency;
-    drawHistory(items, { metric: els.historyMetric.value, ticker, name, currency });
+    drawHistory(items, { metric, ticker, name, currency });
   }
 
   function formatMetricValue(value, metric, currency) {
@@ -268,7 +291,13 @@
 
   els.filter.addEventListener("input", renderPositions);
   els.historyRange.addEventListener("change", () => refreshHistory().catch(() => {}));
-  els.historyTicker.addEventListener("change", () => refreshHistory().catch(() => {}));
+  els.historyTicker.addEventListener("change", () => {
+    selectedHistoryTicker = els.historyTicker.value;
+    refreshHistory().catch((err) => {
+      els.errorBox.textContent = `Position history error: ${err.message}`;
+      els.errorBox.classList.remove("hidden");
+    });
+  });
   els.historyMetric.addEventListener("change", () => refreshHistory().catch(() => {}));
   window.addEventListener("resize", () => refreshHistory().catch(() => {}));
 
