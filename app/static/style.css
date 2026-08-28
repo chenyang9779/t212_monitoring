@@ -52,6 +52,18 @@ td { font-size: 14px; }
 .event-badge { display: inline-block; min-width: 58px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; font-weight: 700; text-align: center; letter-spacing: .02em; }
 .event-open, .event-add { color: var(--good); border-color: color-mix(in srgb, var(--good) 50%, var(--border)); }
 .event-reduce, .event-close { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--border)); }
+.allocation-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.allocation-summary > div { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+.allocation-summary span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.allocation-summary strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.allocation-list { display: grid; gap: 10px; }
+.allocation-row { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(180px, 3fr) minmax(110px, auto); gap: 14px; align-items: center; }
+.allocation-label strong, .allocation-label small, .allocation-value strong, .allocation-value small { display: block; }
+.allocation-label small, .allocation-value small { color: var(--muted); margin-top: 2px; }
+.allocation-value { text-align: right; font-variant-numeric: tabular-nums; }
+.allocation-bar-wrap { height: 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+.allocation-bar { height: 100%; background: var(--accent); border-radius: inherit; }
+.allocation-note { margin-top: 14px; font-size: 12px; }
 .alerts { display: grid; gap: 8px; }
 .alert { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .alert-severity { font-size: 11px; text-transform: uppercase; color: var(--warn); }
@@ -66,4 +78,8 @@ td { font-size: 14px; }
   input { width: 100%; }
   .control-row { width: 100%; }
   .control-row select { width: 100%; }
+  .allocation-summary { grid-template-columns: 1fr; }
+  .allocation-row { grid-template-columns: 1fr auto; gap: 8px 12px; }
+  .allocation-bar-wrap { grid-column: 1 / -1; grid-row: 2; }
+  .allocation-value { grid-column: 2; grid-row: 1; }
 }
