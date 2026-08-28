@@ -68,24 +68,29 @@ def normalize_historical_order(item: dict[str, Any]) -> dict[str, Any] | None:
     if not ticker:
         return None
 
-    explicit_filled = _pick(
+    status = str(_pick(item, "status", "order.status") or "").upper()
+    explicit_filled_raw = _pick(
         item,
         "filledQuantity",
         "executedQuantity",
         "order.filledQuantity",
         "order.executedQuantity",
     )
-    quantity_value = explicit_filled
-    if _finite_number(quantity_value) in (None, 0.0):
-        quantity_value = _pick(item, "quantity", "order.quantity")
 
-    quantity = _finite_number(quantity_value)
-    if quantity in (None, 0.0):
-        return None
-
-    status = str(_pick(item, "status", "order.status") or "").upper()
-    if explicit_filled is None and status in {"CANCELLED", "CANCELED", "REJECTED"}:
-        return None
+    # An explicit filled/executed quantity is authoritative. In particular,
+    # cancelled/rejected orders commonly retain the original order quantity while
+    # reporting filledQuantity=0. Falling back to order.quantity in that case would
+    # manufacture a broker fill that never happened.
+    if explicit_filled_raw is not None:
+        quantity = _finite_number(explicit_filled_raw)
+        if quantity in (None, 0.0):
+            return None
+    else:
+        quantity = _finite_number(_pick(item, "quantity", "order.quantity"))
+        if quantity in (None, 0.0):
+            return None
+        if status in {"CANCELLED", "CANCELED", "REJECTED"}:
+            return None
 
     side = str(_pick(item, "side", "order.side") or "").upper()
     if side in {"SELL", "S"}:
