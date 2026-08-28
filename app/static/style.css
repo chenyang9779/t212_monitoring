@@ -13,10 +13,10 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-.shell { width: min(1280px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 64px; }
+.shell { width: calc(100% - clamp(24px, 3vw, 64px)); max-width: 2200px; margin: 0 auto; padding: 28px 0 64px; }
 .topbar, .panel-heading { display: flex; gap: 16px; justify-content: space-between; align-items: center; }
 h1, h2, p { margin-top: 0; }
-h1 { margin-bottom: 6px; font-size: clamp(1.4rem, 3vw, 2rem); }
+h1 { margin-bottom: 6px; font-size: clamp(1.4rem, 2vw, 2rem); }
 h2 { margin-bottom: 4px; font-size: 1.05rem; }
 .muted { color: var(--muted); margin-bottom: 0; }
 .status-wrap { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; }
@@ -34,11 +34,16 @@ h2 { margin-bottom: 4px; font-size: 1.05rem; }
 .card small { display: block; margin-top: 4px; color: var(--muted); }
 .good-text { color: var(--good) !important; }
 .bad-text { color: var(--bad) !important; }
-.panel { margin-top: 16px; padding: 18px; }
+.analytics-grid, .charts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { margin-top: 16px; padding: 18px; min-width: 0; }
+.analytics-grid > .panel, .charts-grid > .panel { height: calc(100% - 16px); }
 .panel-heading { margin-bottom: 14px; }
 .control-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-select, input { min-height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 8px 10px; font: inherit; }
+select, input, button { min-height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 8px 10px; font: inherit; }
 input { width: min(280px, 100%); }
+button { cursor: pointer; }
+button:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.small-button { min-height: 36px; padding: 6px 10px; font-size: 13px; }
 canvas { width: 100%; display: block; background: var(--panel-2); border-radius: 8px; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; min-width: 820px; }
@@ -66,23 +71,37 @@ td { font-size: 14px; }
 .allocation-bar-wrap { height: 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
 .allocation-bar { height: 100%; background: var(--accent); border-radius: inherit; }
 .allocation-note { margin-top: 14px; font-size: 12px; }
+.comparison-tickers { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.comparison-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: var(--panel-2); border-radius: 999px; padding: 6px 9px; font-size: 12px; cursor: pointer; user-select: none; }
+.comparison-chip input { width: auto; min-height: auto; margin: 0; }
+.comparison-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.comparison-legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.comparison-swatch { width: 18px; height: 3px; border-radius: 999px; display: inline-block; }
 .alerts { display: grid; gap: 8px; }
 .alert { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .alert-severity { font-size: 11px; text-transform: uppercase; color: var(--warn); }
 .alert time { font-size: 12px; color: var(--muted); }
+@media (min-width: 1700px) {
+  .shell { max-width: 2400px; }
+  .cards { gap: 16px; }
+  .panel { padding: 20px; }
+}
+@media (max-width: 1400px) {
+  .analytics-grid, .charts-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 980px) {
   .cards { grid-template-columns: repeat(3, 1fr); }
   .drawdown-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
-  .shell { width: min(100% - 20px, 1280px); padding-top: 18px; }
+  .shell { width: min(100% - 20px, 2400px); padding-top: 18px; }
   .topbar, .panel-heading { align-items: flex-start; flex-direction: column; }
   .cards { grid-template-columns: repeat(2, 1fr); }
   .status-wrap { white-space: normal; }
   .panel { padding: 14px; }
   input { width: 100%; }
   .control-row { width: 100%; }
-  .control-row select { width: 100%; }
+  .control-row select, .control-row button { width: 100%; }
   .allocation-summary, .drawdown-summary { grid-template-columns: 1fr; }
   .allocation-row { grid-template-columns: 1fr auto; gap: 8px 12px; }
   .allocation-bar-wrap { grid-column: 1 / -1; grid-row: 2; }
