@@ -168,6 +168,29 @@ class SnapshotStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def position_history(
+        self,
+        ticker: str,
+        hours: int = 24,
+        limit: int = 1500,
+    ) -> list[dict[str, Any]]:
+        hours = min(max(hours, 1), 24 * 30)
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT ts, ticker, name, currency, quantity, average_price,
+                       current_price, cost_local, market_value_local,
+                       pnl_local, pnl_pct
+                FROM position_snapshots
+                WHERE ticker = ? AND ts >= ?
+                ORDER BY ts ASC
+                LIMIT ?
+                """,
+                (ticker, cutoff, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def alerts(self, limit: int = 50) -> list[dict[str, Any]]:
         limit = min(max(limit, 1), 500)
         with self._connect() as conn:
