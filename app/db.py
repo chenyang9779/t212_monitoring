@@ -325,12 +325,12 @@ class SnapshotStore:
                        realized_pl, unrealized_pl, unrealized_pl_pct
                 FROM account_snapshots
                 WHERE ts >= ?
-                ORDER BY ts ASC
+                ORDER BY ts DESC
                 LIMIT ?
                 """,
                 (cutoff, limit),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [dict(row) for row in reversed(rows)]
 
     def position_history(
         self,
@@ -348,12 +348,12 @@ class SnapshotStore:
                        pnl_local, pnl_pct
                 FROM position_snapshots
                 WHERE ticker = ? AND ts >= ?
-                ORDER BY ts ASC
+                ORDER BY ts DESC
                 LIMIT ?
                 """,
                 (ticker, cutoff, limit),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [dict(row) for row in reversed(rows)]
 
     def market_quotes(
         self,
