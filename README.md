@@ -25,27 +25,91 @@ For live usage, consider restricting the API key to the host's fixed IP/CIDR in 
 
 If a separate quant/execution service is added later, give any order-capable credentials to that service only. Do not add execution permissions to the monitoring key.
 
-## Setup
+## Docker deployment
 
-Python 3.11+ is recommended.
+Docker Compose is the normal way to run the monitor. The image contains the application and Python dependencies; credentials remain outside the image in the local `.env` file.
+
+Requirements:
+
+- Docker Engine
+- Docker Compose plugin (`docker compose`)
+
+Initial setup:
 
 ```bash
-cd trading212-position-monitor
+cp .env.example .env
+mkdir -p data
+```
+
+Edit `.env` and set `T212_API_KEY` and `T212_API_SECRET`. Keep `T212_ENV=demo` while validating the integration. Switch to `T212_ENV=live` only when you want to read the real account.
+
+Build and launch:
+
+```bash
+docker compose up -d --build
+```
+
+Check the container:
+
+```bash
+docker compose ps
+docker compose logs -f monitor
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The Compose configuration publishes port `8000` on all host interfaces by default. For local-only access, set this in `.env`:
+
+```dotenv
+T212_BIND_ADDRESS=127.0.0.1
+```
+
+To use a different host port:
+
+```dotenv
+T212_HOST_PORT=8080
+```
+
+SQLite data is persisted through the bind mount:
+
+```text
+./data -> /app/data
+```
+
+Inside the container, `T212_DB_PATH` is forced to `/app/data/monitor.db`, so an existing local `data/monitor.db` continues to be used after moving to Docker. The SQLite `-wal` and `-shm` sidecar files may appear in `data/` while the application is running; that is normal WAL-mode behavior.
+
+The image runs exactly one Uvicorn worker. This is intentional because the monitor loop, SSE event broker, and metadata cache are process-local. The image also uses a five-second Uvicorn graceful-shutdown timeout so an open SSE browser connection cannot keep container shutdown waiting indefinitely.
+
+Stop the service without deleting the database:
+
+```bash
+docker compose down
+```
+
+Update and restart:
+
+```bash
+git pull origin master
+docker compose up -d --build
+```
+
+The Docker image has a built-in `/healthz` health check. `docker compose ps` will report the container as healthy after startup succeeds. The local `.env`, SQLite files, tests, Git metadata, and virtual environments are excluded from the Docker build context.
+
+## Direct Python development
+
+Running directly on the host is still supported for development. Python 3.11+ is recommended.
+
+```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-
-Edit `.env` locally and set `T212_API_KEY` and `T212_API_SECRET`. Keep `T212_ENV=demo` while validating the integration. Switch to `T212_ENV=live` only when you want to read the real account.
-
-Run:
-
-```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Open `http://127.0.0.1:8000`.
 
 ## Configuration
 
@@ -59,6 +123,10 @@ T212_DB_PATH=data/monitor.db
 T212_RAW_RETENTION_DAYS=
 T212_POSITION_LOSS_ALERT_PCT=
 T212_TOTAL_LOSS_ALERT_PCT=
+
+# Docker Compose only
+T212_BIND_ADDRESS=0.0.0.0
+T212_HOST_PORT=8000
 ```
 
 Alert thresholds are disabled when blank. Example: a value of `8` means an alert is recorded when unrealized return is `<= -8%`.
@@ -82,7 +150,7 @@ Core monitoring:
 - `GET /api/history?hours=24`
 - `GET /api/position-history?ticker=...&hours=24`
 - `GET /api/position-events?limit=100`
-- `GET /api/position-lifecycles?event_limit=500`
+- `GET /api/position-lifecycles`
 - `GET /api/data-quality?hours=24`
 - `GET /api/reconciliation?event_limit=50&tolerance_seconds=180`
 - `GET /api/drawdown?hours=24[&ticker=...]`
@@ -180,10 +248,12 @@ Local datasets:
 - `GET /api/export/positions?format=csv`
 - `GET /api/export/account-history?hours=24&format=csv`
 - `GET /api/export/position-history?ticker=...&hours=24&format=csv`
-- `GET /api/export/position-events?limit=500&format=csv`
+- `GET /api/export/position-events?format=csv`
 - `GET /api/export/alerts?limit=500&format=jsonl`
 - `GET /api/export/market-quotes?ticker=...&hours=24&format=csv`
 - `GET /api/export/market-bars?ticker=...&hours=24&minutes=5&format=csv`
+
+The account-history, position-history, and position-events local exports read the complete requested local dataset rather than inheriting the bounded dashboard history limits.
 
 Broker-backed datasets:
 
