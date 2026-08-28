@@ -26,6 +26,7 @@ from .operations import (
     startup_checks,
 )
 from .quality import evaluate_data_quality
+from .quality_history import account_snapshot_timestamps
 from .reconciliation import reconcile_position_events
 from .service import MonitorService
 from .storage import database_status
@@ -265,7 +266,7 @@ def api_data_quality(
     latest = monitor.latest()
     status = monitor.status()
     return evaluate_data_quality(
-        account_history=store.history(hours=hours),
+        account_history=account_snapshot_timestamps(settings.db_path, hours=hours),
         latest=latest,
         status=status,
         market_catalog=store.market_catalog(source="t212_position"),
