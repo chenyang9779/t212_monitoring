@@ -48,6 +48,31 @@
       <p id="allocationNote" class="allocation-note muted"></p>
     </section>
 
+    <section id="drawdownPanel" class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Drawdown</h2>
+          <p id="drawdownSubtitle" class="muted">Return drawdown, reset when position size changes</p>
+        </div>
+        <div class="control-row">
+          <select id="drawdownTicker" aria-label="Drawdown scope"></select>
+          <select id="drawdownRange" aria-label="Drawdown range">
+            <option value="1">1h</option>
+            <option value="6">6h</option>
+            <option value="24" selected>24h</option>
+            <option value="168">7d</option>
+          </select>
+        </div>
+      </div>
+      <div class="drawdown-summary" aria-label="Drawdown summary">
+        <div><span>Current drawdown</span><strong id="drawdownCurrent">—</strong></div>
+        <div><span>Max drawdown</span><strong id="drawdownMax">—</strong></div>
+        <div><span>Peak return</span><strong id="drawdownPeak">—</strong></div>
+        <div><span>Current return</span><strong id="drawdownReturn">—</strong></div>
+      </div>
+      <p id="drawdownNote" class="allocation-note muted">Drawdown is computed from unrealized-return snapshots, not raw market value.</p>
+    </section>
+
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -141,5 +166,6 @@
   </main>
   <script src="/static/app.js" defer></script>
   <script src="/static/allocation.js" defer></script>
+  <script src="/static/drawdown.js" defer></script>
 </body>
 </html>
