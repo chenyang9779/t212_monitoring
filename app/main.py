@@ -7,6 +7,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .analytics import calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
 from .service import MonitorService
@@ -23,7 +24,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.2.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.3.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -65,6 +66,41 @@ def api_position_history(
 @app.get("/api/position-events")
 def api_position_events(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
     return {"items": store.position_events(limit=limit)}
+
+
+@app.get("/api/drawdown")
+def api_drawdown(
+    hours: int = Query(default=24, ge=1, le=720),
+    ticker: str | None = Query(default=None, min_length=1),
+) -> dict[str, object]:
+    if ticker:
+        history = store.position_history(ticker=ticker, hours=hours)
+        events = store.position_events_since(hours=hours, ticker=ticker)
+        result = calculate_segmented_drawdown(
+            history,
+            [event["ts"] for event in events],
+            "pnl_pct",
+        )
+        return {
+            "scope": "position",
+            "ticker": ticker,
+            "hours": hours,
+            **result,
+        }
+
+    history = store.history(hours=hours)
+    events = store.position_events_since(hours=hours)
+    result = calculate_segmented_drawdown(
+        history,
+        [event["ts"] for event in events],
+        "unrealized_pl_pct",
+    )
+    return {
+        "scope": "overall",
+        "ticker": None,
+        "hours": hours,
+        **result,
+    }
 
 
 @app.get("/api/alerts")
