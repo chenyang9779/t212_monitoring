@@ -17,9 +17,11 @@ from .export_routes import build_export_router
 from .exposure import build_exposure
 from .history_queries import (
     account_history_all,
+    account_history_recent,
     account_snapshot_count,
     account_snapshot_timestamps,
     position_history_all,
+    position_history_recent,
     position_snapshot_count,
 )
 from .lifecycle import build_position_lifecycles
@@ -243,7 +245,7 @@ async def api_exposure(
 
 @app.get("/api/history")
 def api_history(hours: int = Query(default=24, ge=1, le=720)) -> dict[str, object]:
-    items = store.history(hours=hours)
+    items = account_history_recent(settings.db_path, hours=hours)
     total = account_snapshot_count(settings.db_path, hours=hours)
     return {
         "items": items,
@@ -258,7 +260,7 @@ def api_position_history(
     ticker: str = Query(..., min_length=1),
     hours: int = Query(default=24, ge=1, le=720),
 ) -> dict[str, object]:
-    items = store.position_history(ticker=ticker, hours=hours)
+    items = position_history_recent(settings.db_path, ticker=ticker, hours=hours)
     total = position_snapshot_count(settings.db_path, ticker=ticker, hours=hours)
     return {
         "items": items,
