@@ -12,6 +12,7 @@ from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
 from .export_routes import build_export_router
+from .exposure import build_exposure
 from .lifecycle import build_position_lifecycles
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .quality import evaluate_data_quality
@@ -33,7 +34,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="2.2.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="2.3.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.include_router(build_export_router(store, monitor))
@@ -114,6 +115,34 @@ def api_storage() -> dict[str, object]:
 @app.get("/api/latest")
 def api_latest() -> dict[str, object]:
     return monitor.latest()
+
+
+@app.get("/api/instruments")
+async def api_instruments(
+    refresh: bool = Query(default=False),
+) -> dict[str, object]:
+    return await monitor.instruments_metadata(force=refresh)
+
+
+@app.get("/api/exposure")
+async def api_exposure(
+    refresh_metadata: bool = Query(default=False),
+) -> dict[str, object]:
+    latest = monitor.latest()
+    metadata = await monitor.instruments_metadata(force=refresh_metadata)
+    exposure = build_exposure(
+        latest.get("account"),
+        latest.get("positions") or [],
+        metadata.get("items") or [],
+    )
+    return {
+        "available": latest.get("account") is not None,
+        "metadata_available": bool(metadata.get("available")),
+        "metadata_stale": bool(metadata.get("stale")),
+        "metadata_refreshed_at": metadata.get("refreshed_at"),
+        "metadata_error": metadata.get("error"),
+        **exposure,
+    }
 
 
 @app.get("/api/history")
