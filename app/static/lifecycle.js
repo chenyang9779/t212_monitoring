@@ -74,16 +74,20 @@
       </tr>`;
     }).join("");
 
+    const sourceEvents = Number(payload.source_events);
+    const sourceText = Number.isFinite(sourceEvents)
+      ? ` Reconstructed from ${sourceEvents} local event(s).`
+      : "";
     note.textContent = payload.incomplete
-      ? `${payload.incomplete} lifecycle(s) are incomplete because monitoring began after the position was already open. Realized P/L is intentionally not inferred yet.`
-      : "Observed lifecycle coverage is complete for the records shown. Realized P/L is intentionally not inferred yet.";
+      ? `${payload.incomplete} lifecycle(s) are incomplete because monitoring began after the position was already open.${sourceText} Realized P/L is intentionally not inferred yet.`
+      : `Observed lifecycle coverage is complete for the records shown.${sourceText} Realized P/L is intentionally not inferred yet.`;
   }
 
   async function refresh() {
     refreshButton.disabled = true;
     refreshButton.textContent = "Loading…";
     try {
-      render(await getJSON("/api/position-lifecycles?event_limit=500"));
+      render(await getJSON("/api/position-lifecycles"));
     } catch (error) {
       body.innerHTML = `<tr><td colspan="10" class="empty">Lifecycle error: ${escapeHtml(error.message)}</td></tr>`;
       note.textContent = "The rest of the portfolio monitor is unaffected.";
