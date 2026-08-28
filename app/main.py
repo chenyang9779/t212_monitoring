@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
@@ -15,6 +16,15 @@ from .export_routes import build_export_router
 from .exposure import build_exposure
 from .lifecycle import build_position_lifecycles
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
+from .operations import (
+    configure_app_logging,
+    readiness_status,
+    request_log_payload,
+    reset_request_id,
+    resolve_request_id,
+    set_request_id,
+    startup_checks,
+)
 from .quality import evaluate_data_quality
 from .reconciliation import reconcile_position_events
 from .service import MonitorService
@@ -25,19 +35,63 @@ settings = load_settings()
 store = SnapshotStore(settings.db_path)
 event_broker = EventBroker()
 monitor = MonitorService(settings, store, events=event_broker)
+logger = configure_app_logging()
+static_dir = Path(__file__).resolve().parent / "static"
+startup_report = startup_checks(
+    db_path=settings.db_path,
+    static_dir=static_dir,
+    api_key=settings.api_key,
+    api_secret=settings.api_secret,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("application_starting", extra={"structured": {"event": "application_starting", "startup_ok": startup_report["ok"]}})
     await monitor.start()
-    yield
-    await monitor.stop()
+    try:
+        yield
+    finally:
+        logger.info("application_stopping", extra={"structured": {"event": "application_stopping"}})
+        await monitor.stop()
+        logger.info("application_stopped", extra={"structured": {"event": "application_stopped"}})
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="2.3.0", lifespan=lifespan)
-static_dir = Path(__file__).resolve().parent / "static"
+app = FastAPI(title="Trading 212 Position Monitor", version="2.4.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.include_router(build_export_router(store, monitor))
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    request_id = resolve_request_id(request.headers.get("X-Request-ID"))
+    token = set_request_id(request_id)
+    started = time.monotonic()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception:
+        logger.exception(
+            "unhandled_request_exception",
+            extra={"structured": {"event": "http_exception", "method": request.method, "path": request.url.path}},
+        )
+        raise
+    finally:
+        logger.info(
+            "http_request",
+            extra={
+                "structured": request_log_payload(
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=status_code,
+                    started_monotonic=started,
+                )
+            },
+        )
+        reset_request_id(token)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -53,13 +107,43 @@ def index() -> HTMLResponse:
 
 @app.get("/healthz")
 def healthz() -> dict[str, object]:
-    status = monitor.status()
-    return {"ok": status["last_error"] is None, **status}
+    return {
+        "ok": True,
+        "startup_ok": startup_report["ok"],
+        "startup_issues": startup_report["issues"],
+    }
+
+
+@app.get("/readyz")
+def readyz() -> JSONResponse:
+    payload = readiness_status(
+        monitor_status=monitor.status(),
+        db_path=settings.db_path,
+        max_sync_age_seconds=max(settings.poll_seconds * 5.0, 30.0),
+    )
+    payload["startup_ok"] = startup_report["ok"]
+    if not startup_report["ok"]:
+        payload["ready"] = False
+        payload["reasons"] = [*payload["reasons"], "startup_checks_failed"]
+    return JSONResponse(payload, status_code=200 if payload["ready"] else 503)
 
 
 @app.get("/api/status")
 def api_status() -> dict[str, object]:
     return monitor.status()
+
+
+@app.get("/api/operations")
+def api_operations() -> dict[str, object]:
+    return {
+        "startup": startup_report,
+        "readiness": readiness_status(
+            monitor_status=monitor.status(),
+            db_path=settings.db_path,
+            max_sync_age_seconds=max(settings.poll_seconds * 5.0, 30.0),
+        ),
+        "stream": event_broker.stats(),
+    }
 
 
 @app.get("/api/stream/status")
