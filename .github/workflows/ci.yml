@@ -49,3 +49,40 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build --tag t212-monitoring:ci .
+
+      - name: Smoke-test container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name t212-monitoring-ci \
+            --env T212_API_KEY=ci-placeholder-key \
+            --env T212_API_SECRET=ci-placeholder-secret \
+            --env T212_ENV=demo \
+            --env T212_POLL_SECONDS=6 \
+            --env T212_SNAPSHOT_SECONDS=30 \
+            --env T212_DB_PATH=/tmp/monitor.db \
+            --publish 127.0.0.1:18000:8000 \
+            t212-monitoring:ci
+          trap 'docker rm --force t212-monitoring-ci >/dev/null 2>&1 || true' EXIT
+
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error http://127.0.0.1:18000/healthz >/tmp/healthz.json; then
+              cat /tmp/healthz.json
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs t212-monitoring-ci
+          exit 1
