@@ -14,6 +14,7 @@ A read-only Trading 212 portfolio monitor designed so a strategy/execution layer
 - Stores sampled position marks in a separate market-data table for downstream analytics.
 - Exposes CSV and JSONL download endpoints for downstream notebooks and services.
 - Exposes an SSE live stream for browsers and other read-only consumers.
+- Provides liveness/readiness probes, request IDs, startup diagnostics, and structured application logs.
 - Contains no order-placement code.
 
 ## Security model
@@ -71,6 +72,8 @@ The poll interval must be at least five seconds because the account-summary endp
 Core monitoring:
 
 - `GET /healthz`
+- `GET /readyz`
+- `GET /api/operations`
 - `GET /api/status`
 - `GET /api/storage`
 - `GET /api/latest`
@@ -104,6 +107,28 @@ Stored market-data interface:
 - `GET /api/market/bars?ticker=...&hours=24&minutes=5`
 
 Supported sampled-bar intervals are `1, 5, 15, 30, 60, 240, 1440` minutes.
+
+## Operational hardening
+
+`GET /healthz` is a lightweight liveness endpoint. It answers while the process is running and also exposes whether startup checks found configuration or local-resource problems.
+
+`GET /readyz` is stricter. It returns HTTP `200` only when startup checks succeeded, SQLite is queryable, the broker monitor is connected, and the last successful Trading 212 sync is fresh. Otherwise it returns HTTP `503` with machine-readable reasons such as `broker_not_connected`, `broker_sync_stale`, `database_unavailable`, or `startup_checks_failed`.
+
+`GET /api/operations` exposes the startup report, current readiness calculation, and SSE stream counters for local/operator diagnostics.
+
+Every HTTP request receives an `X-Request-ID` response header. A caller-supplied `X-Request-ID` is preserved only when it matches a conservative safe-character policy; otherwise the server generates a new ID. Application request logs are emitted as one-line JSON with UTC timestamps, log level, request ID, method, path, status code, and duration. Unhandled exceptions are logged with the same request ID.
+
+The FastAPI lifespan logs explicit startup/stopping/stopped events and always awaits `monitor.stop()` during shutdown, so the polling task and HTTP client are closed before process exit.
+
+Example probes:
+
+```bash
+curl -i http://127.0.0.1:8000/healthz
+curl -i http://127.0.0.1:8000/readyz
+curl -s http://127.0.0.1:8000/api/operations | python -m json.tool
+```
+
+For a service manager or container orchestrator, use `/healthz` as the liveness probe and `/readyz` as the readiness probe.
 
 ## Instrument metadata and exposure
 
