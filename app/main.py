@@ -7,7 +7,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .analytics import calculate_segmented_drawdown
+from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
 from .service import MonitorService
@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.3.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.4.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -101,6 +101,15 @@ def api_drawdown(
         "hours": hours,
         **result,
     }
+
+
+@app.get("/api/pnl-attribution")
+def api_pnl_attribution() -> dict[str, object]:
+    latest = monitor.latest()
+    return calculate_pnl_attribution(
+        latest.get("account"),
+        latest.get("positions") or [],
+    )
 
 
 @app.get("/api/alerts")
