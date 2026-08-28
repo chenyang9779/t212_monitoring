@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
@@ -39,9 +39,15 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.include_router(build_export_router(store, monitor))
 
 
-@app.get("/")
-def index() -> FileResponse:
-    return FileResponse(static_dir / "index.html")
+@app.get("/", response_class=HTMLResponse)
+def index() -> HTMLResponse:
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+    if "/static/live.js" not in html:
+        html = html.replace(
+            "</body>",
+            '  <script src="/static/live.js" defer></script>\n</body>',
+        )
+    return HTMLResponse(html)
 
 
 @app.get("/healthz")
@@ -78,8 +84,6 @@ async def api_stream(request: Request) -> StreamingResponse:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=15.0)
                 except asyncio.TimeoutError:
-                    # SSE comment heartbeat: keeps proxies from considering an idle
-                    # stream dead without forcing clients to process a fake event.
                     yield ": heartbeat\n\n"
                     continue
                 yield encode_sse(item.event, item.data, event_id=item.id)
