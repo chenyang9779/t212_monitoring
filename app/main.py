@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
+from .lifecycle import build_position_lifecycles
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .reconciliation import reconcile_position_events
 from .service import MonitorService
@@ -26,7 +27,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.7.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.8.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -68,6 +69,17 @@ def api_position_history(
 @app.get("/api/position-events")
 def api_position_events(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
     return {"items": store.position_events(limit=limit)}
+
+
+@app.get("/api/position-lifecycles")
+def api_position_lifecycles(
+    event_limit: int = Query(default=500, ge=1, le=500),
+) -> dict[str, object]:
+    latest = monitor.latest()
+    return build_position_lifecycles(
+        store.position_events(limit=event_limit),
+        latest.get("positions") or [],
+    )
 
 
 @app.get("/api/reconciliation")
