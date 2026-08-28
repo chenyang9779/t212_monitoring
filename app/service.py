@@ -8,6 +8,7 @@ from typing import Any
 from .config import Settings
 from .db import SnapshotStore
 from .metrics import normalize_account, normalize_position
+from .storage import prune_raw_data
 from .t212 import Trading212Client, Trading212Error
 
 
@@ -19,6 +20,9 @@ class MonitorState:
     last_error: str | None = None
     account_rate_limit: dict[str, str] = field(default_factory=dict)
     positions_rate_limit: dict[str, str] = field(default_factory=dict)
+    last_maintenance: str | None = None
+    maintenance_error: str | None = None
+    maintenance_deleted_total: int = 0
 
 
 class MonitorService:
@@ -30,6 +34,7 @@ class MonitorService:
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         self._last_snapshot_monotonic = 0.0
+        self._last_maintenance_monotonic = 0.0
         self._active_alert_keys: set[str] = set()
         self._previous_positions: dict[str, dict[str, Any]] | None = None
 
@@ -78,6 +83,7 @@ class MonitorService:
                     await asyncio.to_thread(self.store.save_snapshot, now, account, positions)
                     self._last_snapshot_monotonic = loop.time()
 
+                await self._run_storage_maintenance(loop.time())
                 await self._evaluate_alerts(now, account, positions)
             except asyncio.CancelledError:
                 raise
@@ -90,6 +96,28 @@ class MonitorService:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_for)
             except asyncio.TimeoutError:
                 pass
+
+    async def _run_storage_maintenance(self, monotonic_now: float) -> None:
+        retention_days = self.settings.raw_retention_days
+        if retention_days is None:
+            return
+        # Run once shortly after startup and then at most every six hours.
+        if self._last_maintenance_monotonic and monotonic_now - self._last_maintenance_monotonic < 21600:
+            return
+
+        self._last_maintenance_monotonic = monotonic_now
+        try:
+            result = await asyncio.to_thread(
+                prune_raw_data,
+                self.store.path,
+                retention_days,
+            )
+            self.state.last_maintenance = datetime.now(timezone.utc).isoformat()
+            self.state.maintenance_error = None
+            self.state.maintenance_deleted_total = int(result.get("deleted_total") or 0)
+        except Exception as exc:
+            # Retention failures must not make portfolio monitoring appear disconnected.
+            self.state.maintenance_error = str(exc)
 
     async def _record_position_events(
         self,
@@ -208,6 +236,10 @@ class MonitorService:
             "connected": self.state.last_sync is not None and self.state.last_error is None,
             "account_rate_limit": self.state.account_rate_limit,
             "positions_rate_limit": self.state.positions_rate_limit,
+            "raw_retention_days": self.settings.raw_retention_days,
+            "last_maintenance": self.state.last_maintenance,
+            "maintenance_error": self.state.maintenance_error,
+            "maintenance_deleted_total": self.state.maintenance_deleted_total,
         }
 
     def _require_client(self) -> Trading212Client:
