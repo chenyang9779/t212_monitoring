@@ -49,6 +49,9 @@ td { font-size: 14px; }
 .instrument strong, .instrument small { display: block; }
 .instrument small { color: var(--muted); margin-top: 3px; }
 .empty { text-align: center; color: var(--muted); padding: 24px; }
+.event-badge { display: inline-block; min-width: 58px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; font-weight: 700; text-align: center; letter-spacing: .02em; }
+.event-open, .event-add { color: var(--good); border-color: color-mix(in srgb, var(--good) 50%, var(--border)); }
+.event-reduce, .event-close { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--border)); }
 .alerts { display: grid; gap: 8px; }
 .alert { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .alert-severity { font-size: 11px; text-transform: uppercase; color: var(--warn); }
