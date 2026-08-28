@@ -96,6 +96,12 @@ class Trading212Client:
     async def get_positions(self) -> ApiResponse:
         return await self._get("/equity/positions")
 
+    async def get_instruments_metadata(self) -> ApiResponse:
+        return await self._get("/equity/metadata/instruments")
+
+    async def get_exchanges_metadata(self) -> ApiResponse:
+        return await self._get("/equity/metadata/exchanges")
+
     async def get_pending_orders(self) -> ApiResponse:
         return await self._get("/equity/orders")
 
