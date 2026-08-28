@@ -16,6 +16,7 @@ from .drawdown_history import account_drawdown_history, position_drawdown_histor
 from .export_routes import build_export_router
 from .exposure import build_exposure
 from .lifecycle import build_position_lifecycles
+from .lifecycle_history import position_events_all
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .operations import (
     configure_app_logging,
@@ -254,10 +255,16 @@ def api_position_lifecycles(
     event_limit: int = Query(default=500, ge=1, le=500),
 ) -> dict[str, object]:
     latest = monitor.latest()
-    return build_position_lifecycles(
-        store.position_events(limit=event_limit),
+    events = position_events_all(settings.db_path)
+    result = build_position_lifecycles(
+        events,
         latest.get("positions") or [],
     )
+    return {
+        **result,
+        "source_events": len(events),
+        "event_history_complete": True,
+    }
 
 
 @app.get("/api/data-quality")
