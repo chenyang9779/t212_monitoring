@@ -12,8 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
+from .event_queries import position_events_all, position_events_page
 from .export_routes import build_export_router
 from .exposure import build_exposure
+from .history_queries import (
+    account_history_all,
+    account_snapshot_count,
+    account_snapshot_timestamps,
+    position_history_all,
+    position_snapshot_count,
+)
 from .lifecycle import build_position_lifecycles
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
 from .operations import (
@@ -135,13 +143,17 @@ def api_status() -> dict[str, object]:
 
 @app.get("/api/operations")
 def api_operations() -> dict[str, object]:
+    readiness = readiness_status(
+        monitor_status=monitor.status(),
+        db_path=settings.db_path,
+        max_sync_age_seconds=max(settings.poll_seconds * 5.0, 30.0),
+    )
+    if not startup_report["ok"]:
+        readiness["ready"] = False
+        readiness["reasons"] = [*readiness["reasons"], "startup_checks_failed"]
     return {
         "startup": startup_report,
-        "readiness": readiness_status(
-            monitor_status=monitor.status(),
-            db_path=settings.db_path,
-            max_sync_age_seconds=max(settings.poll_seconds * 5.0, 30.0),
-        ),
+        "readiness": readiness,
         "stream": event_broker.stats(),
     }
 
@@ -231,7 +243,14 @@ async def api_exposure(
 
 @app.get("/api/history")
 def api_history(hours: int = Query(default=24, ge=1, le=720)) -> dict[str, object]:
-    return {"items": store.history(hours=hours)}
+    items = store.history(hours=hours)
+    total = account_snapshot_count(settings.db_path, hours=hours)
+    return {
+        "items": items,
+        "total": total,
+        "returned": len(items),
+        "truncated": total > len(items),
+    }
 
 
 @app.get("/api/position-history")
@@ -239,23 +258,34 @@ def api_position_history(
     ticker: str = Query(..., min_length=1),
     hours: int = Query(default=24, ge=1, le=720),
 ) -> dict[str, object]:
-    return {"items": store.position_history(ticker=ticker, hours=hours)}
+    items = store.position_history(ticker=ticker, hours=hours)
+    total = position_snapshot_count(settings.db_path, ticker=ticker, hours=hours)
+    return {
+        "items": items,
+        "total": total,
+        "returned": len(items),
+        "truncated": total > len(items),
+    }
 
 
 @app.get("/api/position-events")
-def api_position_events(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, object]:
-    return {"items": store.position_events(limit=limit)}
+def api_position_events(
+    limit: int = Query(default=100, ge=1, le=500),
+    before_id: int | None = Query(default=None, ge=1),
+) -> dict[str, object]:
+    return position_events_page(settings.db_path, limit=limit, before_id=before_id)
 
 
 @app.get("/api/position-lifecycles")
-def api_position_lifecycles(
-    event_limit: int = Query(default=500, ge=1, le=500),
-) -> dict[str, object]:
+def api_position_lifecycles() -> dict[str, object]:
     latest = monitor.latest()
-    return build_position_lifecycles(
-        store.position_events(limit=event_limit),
-        latest.get("positions") or [],
-    )
+    events = position_events_all(settings.db_path)
+    result = build_position_lifecycles(events, latest.get("positions") or [])
+    return {
+        **result,
+        "source_events": len(events),
+        "event_history_complete": True,
+    }
 
 
 @app.get("/api/data-quality")
@@ -265,7 +295,7 @@ def api_data_quality(
     latest = monitor.latest()
     status = monitor.status()
     return evaluate_data_quality(
-        account_history=store.history(hours=hours),
+        account_history=account_snapshot_timestamps(settings.db_path, hours=hours),
         latest=latest,
         status=status,
         market_catalog=store.market_catalog(source="t212_position"),
@@ -308,7 +338,7 @@ def api_drawdown(
     ticker: str | None = Query(default=None, min_length=1),
 ) -> dict[str, object]:
     if ticker:
-        history = store.position_history(ticker=ticker, hours=hours)
+        history = position_history_all(settings.db_path, ticker=ticker, hours=hours)
         events = store.position_events_since(hours=hours, ticker=ticker)
         result = calculate_segmented_drawdown(
             history,
@@ -322,7 +352,7 @@ def api_drawdown(
             **result,
         }
 
-    history = store.history(hours=hours)
+    history = account_history_all(settings.db_path, hours=hours)
     events = store.position_events_since(hours=hours)
     result = calculate_segmented_drawdown(
         history,
