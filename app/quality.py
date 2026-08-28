@@ -121,7 +121,7 @@ def evaluate_data_quality(
     if last_sync is None:
         add_issue("never_synced", "critical", "The monitor has not completed a successful Trading 212 sync.")
     elif sync_age_seconds is not None and sync_age_seconds > sync_warning_after:
-        severity = "critical" if sync_age_seconds > sync_critical_after else "warning"
+        severity = "critical" if sync_age_seconds >= sync_critical_after else "warning"
         add_issue(
             "stale_sync",
             severity,
