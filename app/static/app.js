@@ -5,7 +5,8 @@
     totalValue: $("totalValue"), invested: $("invested"), cash: $("cash"), unrealized: $("unrealized"),
     unrealizedPct: $("unrealizedPct"), realized: $("realized"), positionCount: $("positionCount"), lastSync: $("lastSync"),
     positionsBody: $("positionsBody"), filter: $("filter"), historyRange: $("historyRange"), historyChart: $("historyChart"), alerts: $("alerts"),
-    historyTicker: $("historyTicker"), historyMetric: $("historyMetric"), historySubtitle: $("historySubtitle")
+    historyTicker: $("historyTicker"), historyMetric: $("historyMetric"), historySubtitle: $("historySubtitle"),
+    positionEventsBody: $("positionEventsBody")
   };
 
   let latestPositions = [];
@@ -147,6 +148,29 @@
     if (selectionChanged) {
       await refreshHistory();
     }
+  }
+
+  async function refreshPositionEvents() {
+    const data = await getJSON("/api/position-events?limit=50");
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) {
+      els.positionEventsBody.innerHTML = `<tr><td colspan="7" class="empty">No position activity recorded yet.</td></tr>`;
+      return;
+    }
+
+    els.positionEventsBody.innerHTML = items.map((event) => {
+      const deltaClass = event.delta_quantity > 0 ? "good-text" : "bad-text";
+      const deltaText = `${event.delta_quantity > 0 ? "+" : ""}${number(event.delta_quantity, 6)}`;
+      return `<tr>
+        <td>${new Date(event.ts).toLocaleString()}</td>
+        <td class="instrument"><strong>${escapeHtml(event.ticker)}</strong><small>${escapeHtml(event.name)}</small></td>
+        <td><span class="event-badge event-${escapeHtml(String(event.event_type).toLowerCase())}">${escapeHtml(event.event_type)}</span></td>
+        <td class="num">${number(event.quantity_before, 6)}</td>
+        <td class="num">${number(event.quantity_after, 6)}</td>
+        <td class="num ${deltaClass}">${deltaText}</td>
+        <td class="num">${money(event.current_price, event.currency)}</td>
+      </tr>`;
+    }).join("");
   }
 
   async function refreshAlerts() {
@@ -344,8 +368,10 @@
 
   cycle();
   refreshHistory().catch(() => {});
+  refreshPositionEvents().catch(() => {});
   refreshAlerts().catch(() => {});
   setInterval(cycle, 6000);
   setInterval(() => refreshHistory().catch(() => {}), 30000);
+  setInterval(() => refreshPositionEvents().catch(() => {}), 15000);
   setInterval(() => refreshAlerts().catch(() => {}), 15000);
 })();
