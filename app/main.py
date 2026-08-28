@@ -12,6 +12,7 @@ from .config import load_settings
 from .db import SnapshotStore
 from .lifecycle import build_position_lifecycles
 from .market_data import SUPPORTED_BAR_MINUTES, aggregate_quotes_to_bars
+from .quality import evaluate_data_quality
 from .reconciliation import reconcile_position_events
 from .service import MonitorService
 
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="1.8.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="1.9.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -79,6 +80,23 @@ def api_position_lifecycles(
     return build_position_lifecycles(
         store.position_events(limit=event_limit),
         latest.get("positions") or [],
+    )
+
+
+@app.get("/api/data-quality")
+def api_data_quality(
+    hours: int = Query(default=24, ge=1, le=168),
+) -> dict[str, object]:
+    latest = monitor.latest()
+    status = monitor.status()
+    return evaluate_data_quality(
+        account_history=store.history(hours=hours),
+        latest=latest,
+        status=status,
+        market_catalog=store.market_catalog(source="t212_position"),
+        hours=hours,
+        poll_seconds=settings.poll_seconds,
+        snapshot_seconds=settings.snapshot_seconds,
     )
 
 
