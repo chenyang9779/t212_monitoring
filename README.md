@@ -8,8 +8,9 @@ A read-only Trading 212 portfolio monitor designed so a strategy/execution layer
 - Shows account value, cash, realized/unrealized P&L, and all open positions.
 - Stores account and position snapshots in SQLite.
 - Detects position OPEN / ADD / REDUCE / CLOSE events while the monitor is running.
-- Provides allocation, drawdown, normalized position comparison, and P/L attribution views.
+- Provides allocation, drawdown, normalized position comparison, P/L attribution, and instrument exposure views.
 - Exposes read-only pending orders, historical orders, and transactions when the API key has those permissions.
+- Caches Trading 212 instrument metadata for quoted-currency and instrument-type exposure.
 - Stores sampled position marks in a separate market-data table for downstream analytics.
 - Exposes CSV and JSONL download endpoints for downstream notebooks and services.
 - Exposes an SSE live stream for browsers and other read-only consumers.
@@ -73,6 +74,8 @@ Core monitoring:
 - `GET /api/status`
 - `GET /api/storage`
 - `GET /api/latest`
+- `GET /api/instruments[?refresh=true]`
+- `GET /api/exposure[?refresh_metadata=true]`
 - `GET /api/history?hours=24`
 - `GET /api/position-history?ticker=...&hours=24`
 - `GET /api/position-events?limit=100`
@@ -101,6 +104,17 @@ Stored market-data interface:
 - `GET /api/market/bars?ticker=...&hours=24&minutes=5`
 
 Supported sampled-bar intervals are `1, 5, 15, 30, 60, 240, 1440` minutes.
+
+## Instrument metadata and exposure
+
+`GET /api/instruments` fetches Trading 212's read-only instrument metadata and caches it in memory for six hours. `?refresh=true` forces a refresh. Metadata failures do not mark the core portfolio monitor disconnected; if a previous metadata response exists, the endpoint can continue serving it as stale cache.
+
+`GET /api/exposure` joins current open positions to that metadata and aggregates **account-currency position values** by:
+
+- instrument quoted currency, and
+- Trading 212 instrument type.
+
+The exposure code deliberately does not invent sector or country classifications. Quoted currency is also not treated as issuer domicile or economic/revenue exposure. A future provider can add sector/country metadata under a separate source without changing that distinction.
 
 ## SSE live stream
 
