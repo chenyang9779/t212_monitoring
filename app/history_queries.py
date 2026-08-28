@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 _MAX_HISTORY_HOURS = 24 * 30
+_DEFAULT_UI_LIMIT = 25000
 
 
 def _cutoff(hours: int) -> str:
@@ -23,8 +24,8 @@ def account_snapshot_timestamps(path: Path, hours: int = 24) -> list[dict[str, s
     """Return every account-snapshot timestamp in the requested window.
 
     This deliberately has no UI-oriented row cap. Data-quality continuity checks
-    need the complete timestamp series even when chart/history endpoints sample or
-    limit richer rows.
+    need the complete timestamp series even when chart/history endpoints limit
+    richer rows.
     """
 
     cutoff = _cutoff(hours)
@@ -63,6 +64,57 @@ def position_snapshot_count(path: Path, ticker: str, hours: int = 24) -> int:
             (ticker, cutoff),
         ).fetchone()
     return int(row["count"] if row is not None else 0)
+
+
+def account_history_recent(
+    path: Path,
+    hours: int = 24,
+    limit: int = _DEFAULT_UI_LIMIT,
+) -> list[dict[str, Any]]:
+    """Return the newest bounded account-history slice in chronological order."""
+
+    cutoff = _cutoff(hours)
+    limit = min(max(int(limit), 1), _DEFAULT_UI_LIMIT)
+    with _connect(path) as conn:
+        rows = conn.execute(
+            """
+            SELECT ts, currency, total_value, available_to_trade,
+                   investments_current_value, investments_total_cost,
+                   realized_pl, unrealized_pl, unrealized_pl_pct
+            FROM account_snapshots
+            WHERE ts >= ?
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (cutoff, limit),
+        ).fetchall()
+    return [dict(row) for row in reversed(rows)]
+
+
+def position_history_recent(
+    path: Path,
+    ticker: str,
+    hours: int = 24,
+    limit: int = _DEFAULT_UI_LIMIT,
+) -> list[dict[str, Any]]:
+    """Return the newest bounded position-history slice in chronological order."""
+
+    cutoff = _cutoff(hours)
+    limit = min(max(int(limit), 1), _DEFAULT_UI_LIMIT)
+    with _connect(path) as conn:
+        rows = conn.execute(
+            """
+            SELECT ts, ticker, name, currency, quantity, average_price,
+                   current_price, cost_local, market_value_local,
+                   pnl_local, pnl_pct
+            FROM position_snapshots
+            WHERE ticker = ? AND ts >= ?
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (ticker, cutoff, limit),
+        ).fetchall()
+    return [dict(row) for row in reversed(rows)]
 
 
 def account_history_all(path: Path, hours: int = 24) -> list[dict[str, Any]]:
