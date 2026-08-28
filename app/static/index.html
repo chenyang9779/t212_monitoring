@@ -91,17 +91,9 @@
       <div class="table-wrap">
         <table class="attribution-table">
           <thead>
-            <tr>
-              <th>Instrument</th>
-              <th class="num">P/L</th>
-              <th class="num">Net contribution</th>
-              <th class="num">Gross share</th>
-              <th class="num">FX impact</th>
-            </tr>
+            <tr><th>Instrument</th><th class="num">P/L</th><th class="num">Net contribution</th><th class="num">Gross share</th><th class="num">FX impact</th></tr>
           </thead>
-          <tbody id="attributionBody">
-            <tr><td colspan="5" class="empty">Waiting for attribution data…</td></tr>
-          </tbody>
+          <tbody id="attributionBody"><tr><td colspan="5" class="empty">Waiting for attribution data…</td></tr></tbody>
         </table>
       </div>
       <p id="attributionNote" class="allocation-note muted"></p>
@@ -110,19 +102,11 @@
     <div class="charts-grid">
       <section id="comparisonPanel" class="panel">
         <div class="panel-heading">
-          <div>
-            <h2>Position comparison</h2>
-            <p class="muted">Current-price snapshots rebased to 0% at the start of the selected window</p>
-          </div>
+          <div><h2>Position comparison</h2><p class="muted">Current-price snapshots rebased to 0% at the start of the selected window</p></div>
           <div class="control-row">
             <button id="comparisonSelectAll" class="small-button" type="button">Select all</button>
             <button id="comparisonClear" class="small-button" type="button">Clear</button>
-            <select id="comparisonRange" aria-label="Comparison range">
-              <option value="1">1h</option>
-              <option value="6">6h</option>
-              <option value="24" selected>24h</option>
-              <option value="168">7d</option>
-            </select>
+            <select id="comparisonRange" aria-label="Comparison range"><option value="1">1h</option><option value="6">6h</option><option value="24" selected>24h</option><option value="168">7d</option></select>
           </div>
         </div>
         <div id="comparisonTickers" class="comparison-tickers" aria-label="Positions to compare"></div>
@@ -133,25 +117,11 @@
 
       <section class="panel">
         <div class="panel-heading">
-          <div>
-            <h2>Position history</h2>
-            <p id="historySubtitle" class="muted">Historical snapshots for the selected holding stored locally in SQLite</p>
-          </div>
+          <div><h2>Position history</h2><p id="historySubtitle" class="muted">Historical snapshots for the selected holding stored locally in SQLite</p></div>
           <div class="control-row">
             <select id="historyTicker" aria-label="Position ticker"></select>
-            <select id="historyMetric" aria-label="Position metric">
-              <option value="market_value_local" selected>Market value</option>
-              <option value="pnl_local">P/L</option>
-              <option value="pnl_pct">P/L %</option>
-              <option value="current_price">Current price</option>
-              <option value="quantity">Quantity</option>
-            </select>
-            <select id="historyRange" aria-label="History range">
-              <option value="1">1h</option>
-              <option value="6">6h</option>
-              <option value="24" selected>24h</option>
-              <option value="168">7d</option>
-            </select>
+            <select id="historyMetric" aria-label="Position metric"><option value="market_value_local" selected>Market value</option><option value="pnl_local">P/L</option><option value="pnl_pct">P/L %</option><option value="current_price">Current price</option><option value="quantity">Quantity</option></select>
+            <select id="historyRange" aria-label="History range"><option value="1">1h</option><option value="6">6h</option><option value="24" selected>24h</option><option value="168">7d</option></select>
           </div>
         </div>
         <canvas id="historyChart" height="260" aria-label="Position history chart"></canvas>
@@ -159,96 +129,42 @@
     </div>
 
     <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Open positions</h2>
-          <p id="lastSync" class="muted">Last sync: —</p>
-        </div>
-        <input id="filter" type="search" placeholder="Filter ticker / name" aria-label="Filter positions">
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Instrument</th>
-              <th class="num">Qty</th>
-              <th class="num">Avg</th>
-              <th class="num">Current</th>
-              <th class="num">Value</th>
-              <th class="num">P/L</th>
-              <th class="num">P/L %</th>
-            </tr>
-          </thead>
-          <tbody id="positionsBody">
-            <tr><td colspan="7" class="empty">Waiting for data…</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="panel-heading"><div><h2>Open positions</h2><p id="lastSync" class="muted">Last sync: —</p></div><input id="filter" type="search" placeholder="Filter ticker / name" aria-label="Filter positions"></div>
+      <div class="table-wrap"><table><thead><tr><th>Instrument</th><th class="num">Qty</th><th class="num">Avg</th><th class="num">Current</th><th class="num">Value</th><th class="num">P/L</th><th class="num">P/L %</th></tr></thead><tbody id="positionsBody"><tr><td colspan="7" class="empty">Waiting for data…</td></tr></tbody></table></div>
     </section>
 
     <section id="brokerActivityPanel" class="panel">
+      <div class="panel-heading"><div><h2>Broker activity</h2><p class="muted">Read-only Trading 212 pending orders, historical orders and transactions</p></div><button id="brokerRefresh" class="small-button" type="button">Refresh</button></div>
+      <div class="broker-tabs" role="tablist" aria-label="Broker activity views"><button class="broker-tab active" type="button" data-view="pending" role="tab">Pending orders</button><button class="broker-tab" type="button" data-view="history" role="tab">Order history</button><button class="broker-tab" type="button" data-view="transactions" role="tab">Transactions</button></div>
+      <div class="table-wrap"><table class="broker-table"><thead id="brokerHead"></thead><tbody id="brokerBody"><tr><td class="empty">Waiting for broker activity…</td></tr></tbody></table></div>
+      <div class="broker-footer"><p id="brokerNote" class="allocation-note muted">This panel only performs GET requests.</p><button id="brokerLoadMore" class="small-button hidden" type="button">Load more</button></div>
+    </section>
+
+    <section id="reconciliationPanel" class="panel">
       <div class="panel-heading">
-        <div>
-          <h2>Broker activity</h2>
-          <p class="muted">Read-only Trading 212 pending orders, historical orders and transactions</p>
-        </div>
-        <button id="brokerRefresh" class="small-button" type="button">Refresh</button>
+        <div><h2>Broker reconciliation</h2><p class="muted">Checks observed position quantity changes against Trading 212 historical fills</p></div>
+        <button id="reconciliationRefresh" class="small-button" type="button">Reconcile</button>
       </div>
-      <div class="broker-tabs" role="tablist" aria-label="Broker activity views">
-        <button class="broker-tab active" type="button" data-view="pending" role="tab">Pending orders</button>
-        <button class="broker-tab" type="button" data-view="history" role="tab">Order history</button>
-        <button class="broker-tab" type="button" data-view="transactions" role="tab">Transactions</button>
+      <div class="reconciliation-summary">
+        <div><span>Matched</span><strong id="reconciliationMatched">—</strong></div>
+        <div><span>Unmatched</span><strong id="reconciliationUnmatched">—</strong></div>
+        <div><span>Match rate</span><strong id="reconciliationRate">—</strong></div>
       </div>
       <div class="table-wrap">
-        <table class="broker-table">
-          <thead id="brokerHead"></thead>
-          <tbody id="brokerBody">
-            <tr><td class="empty">Waiting for broker activity…</td></tr>
-          </tbody>
+        <table class="reconciliation-table">
+          <thead><tr><th>Observed</th><th>Instrument</th><th>Event</th><th>Status</th><th class="num">Observed qty</th><th class="num">Broker qty</th><th class="num">Fill price</th><th class="num">Lag</th></tr></thead>
+          <tbody id="reconciliationBody"><tr><td colspan="8" class="empty">Waiting for reconciliation…</td></tr></tbody>
         </table>
       </div>
-      <div class="broker-footer">
-        <p id="brokerNote" class="allocation-note muted">This panel only performs GET requests.</p>
-        <button id="brokerLoadMore" class="small-button hidden" type="button">Load more</button>
-      </div>
+      <p id="reconciliationNote" class="allocation-note muted">A polling delta may reconcile to one or more broker fills.</p>
     </section>
 
     <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Position activity</h2>
-          <p class="muted">Quantity changes observed while the monitor is running</p>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table class="activity-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Instrument</th>
-              <th>Event</th>
-              <th class="num">Before</th>
-              <th class="num">After</th>
-              <th class="num">Delta</th>
-              <th class="num">Price</th>
-            </tr>
-          </thead>
-          <tbody id="positionEventsBody">
-            <tr><td colspan="7" class="empty">No position activity recorded yet.</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="panel-heading"><div><h2>Position activity</h2><p class="muted">Quantity changes observed while the monitor is running</p></div></div>
+      <div class="table-wrap"><table class="activity-table"><thead><tr><th>Time</th><th>Instrument</th><th>Event</th><th class="num">Before</th><th class="num">After</th><th class="num">Delta</th><th class="num">Price</th></tr></thead><tbody id="positionEventsBody"><tr><td colspan="7" class="empty">No position activity recorded yet.</td></tr></tbody></table></div>
     </section>
 
-    <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Alerts</h2>
-          <p class="muted">Optional thresholds are configured in .env</p>
-        </div>
-      </div>
-      <div id="alerts" class="alerts"><div class="empty">No alerts.</div></div>
-    </section>
+    <section class="panel"><div class="panel-heading"><div><h2>Alerts</h2><p class="muted">Optional thresholds are configured in .env</p></div></div><div id="alerts" class="alerts"><div class="empty">No alerts.</div></div></section>
   </main>
   <script src="/static/app.js" defer></script>
   <script src="/static/allocation.js" defer></script>
@@ -256,5 +172,6 @@
   <script src="/static/comparison.js" defer></script>
   <script src="/static/attribution.js" defer></script>
   <script src="/static/broker.js" defer></script>
+  <script src="/static/reconciliation.js" defer></script>
 </body>
 </html>
