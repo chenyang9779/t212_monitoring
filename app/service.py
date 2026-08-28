@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from .config import Settings
 from .db import SnapshotStore
+from .exposure import normalize_instrument_metadata
 from .metrics import normalize_account, normalize_position
 from .storage import prune_raw_data
 from .streaming import EventBroker
@@ -24,6 +26,9 @@ class MonitorState:
     last_maintenance: str | None = None
     maintenance_error: str | None = None
     maintenance_deleted_total: int = 0
+    instrument_metadata: list[dict[str, Any]] = field(default_factory=list)
+    instrument_metadata_refreshed_at: str | None = None
+    instrument_metadata_error: str | None = None
 
 
 class MonitorService:
@@ -42,6 +47,7 @@ class MonitorService:
         self._stop = asyncio.Event()
         self._last_snapshot_monotonic = 0.0
         self._last_maintenance_monotonic = 0.0
+        self._instrument_metadata_monotonic = 0.0
         self._active_alert_keys: set[str] = set()
         self._previous_positions: dict[str, dict[str, Any]] | None = None
 
@@ -130,7 +136,6 @@ class MonitorService:
         retention_days = self.settings.raw_retention_days
         if retention_days is None:
             return
-        # Run once shortly after startup and then at most every six hours.
         if self._last_maintenance_monotonic and monotonic_now - self._last_maintenance_monotonic < 21600:
             return
 
@@ -152,7 +157,6 @@ class MonitorService:
                 },
             )
         except Exception as exc:
-            # Retention failures must not make portfolio monitoring appear disconnected.
             self.state.maintenance_error = str(exc)
             self._publish("maintenance_error", {"error": self.state.maintenance_error})
 
@@ -302,12 +306,71 @@ class MonitorService:
             "last_maintenance": self.state.last_maintenance,
             "maintenance_error": self.state.maintenance_error,
             "maintenance_deleted_total": self.state.maintenance_deleted_total,
+            "instrument_metadata_refreshed_at": self.state.instrument_metadata_refreshed_at,
+            "instrument_metadata_error": self.state.instrument_metadata_error,
         }
 
     def _require_client(self) -> Trading212Client:
         if self._client is None:
             raise Trading212Error("Trading 212 client is not initialized")
         return self._client
+
+    async def instruments_metadata(self, force: bool = False) -> dict[str, Any]:
+        cache_seconds = 21600.0
+        cache_fresh = (
+            bool(self.state.instrument_metadata)
+            and self._instrument_metadata_monotonic > 0
+            and time.monotonic() - self._instrument_metadata_monotonic < cache_seconds
+        )
+        if cache_fresh and not force:
+            return {
+                "available": True,
+                "items": self.state.instrument_metadata,
+                "refreshed_at": self.state.instrument_metadata_refreshed_at,
+                "stale": False,
+                "error": None,
+            }
+
+        try:
+            response = await self._require_client().get_instruments_metadata()
+            raw_items = response.data if isinstance(response.data, list) else []
+            items = [
+                normalized
+                for raw in raw_items
+                if isinstance(raw, dict)
+                for normalized in [normalize_instrument_metadata(raw)]
+                if normalized is not None
+            ]
+            self.state.instrument_metadata = items
+            self.state.instrument_metadata_refreshed_at = datetime.now(timezone.utc).isoformat()
+            self.state.instrument_metadata_error = None
+            self._instrument_metadata_monotonic = time.monotonic()
+            return {
+                "available": True,
+                "items": items,
+                "refreshed_at": self.state.instrument_metadata_refreshed_at,
+                "stale": False,
+                "error": None,
+            }
+        except Trading212Error as exc:
+            self.state.instrument_metadata_error = str(exc)
+            if self.state.instrument_metadata:
+                return {
+                    "available": True,
+                    "items": self.state.instrument_metadata,
+                    "refreshed_at": self.state.instrument_metadata_refreshed_at,
+                    "stale": True,
+                    "error": str(exc),
+                    "status_code": exc.status_code,
+                }
+            return {
+                "available": False,
+                "items": [],
+                "refreshed_at": None,
+                "stale": False,
+                "error": str(exc),
+                "status_code": exc.status_code,
+            }
 
     async def pending_orders(self) -> dict[str, Any]:
         try:
