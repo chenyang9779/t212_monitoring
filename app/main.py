@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
 from .config import load_settings
 from .db import SnapshotStore
+from .drawdown_history import account_drawdown_history, position_drawdown_history
 from .export_routes import build_export_router
 from .exposure import build_exposure
 from .lifecycle import build_position_lifecycles
@@ -309,7 +310,7 @@ def api_drawdown(
     ticker: str | None = Query(default=None, min_length=1),
 ) -> dict[str, object]:
     if ticker:
-        history = store.position_history(ticker=ticker, hours=hours)
+        history = position_drawdown_history(settings.db_path, ticker=ticker, hours=hours)
         events = store.position_events_since(hours=hours, ticker=ticker)
         result = calculate_segmented_drawdown(
             history,
@@ -323,7 +324,7 @@ def api_drawdown(
             **result,
         }
 
-    history = store.history(hours=hours)
+    history = account_drawdown_history(settings.db_path, hours=hours)
     events = store.position_events_since(hours=hours)
     result = calculate_segmented_drawdown(
         history,
