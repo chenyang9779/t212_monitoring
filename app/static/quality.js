@@ -68,7 +68,7 @@
 
   async function refresh() {
     refreshButton.disabled = true;
-    qualityIssues.innerHTML = `<div class="empty">Checking data quality…</div>`;
+    issuesEl.innerHTML = `<div class="empty">Checking data quality…</div>`;
     try {
       const hours = Number(rangeEl.value) || 24;
       const payload = await getJSON(`/api/data-quality?hours=${hours}`);
