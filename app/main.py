@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .analytics import calculate_pnl_attribution, calculate_segmented_drawdown
@@ -17,10 +18,12 @@ from .quality import evaluate_data_quality
 from .reconciliation import reconcile_position_events
 from .service import MonitorService
 from .storage import database_status
+from .streaming import EventBroker, encode_sse
 
 settings = load_settings()
 store = SnapshotStore(settings.db_path)
-monitor = MonitorService(settings, store)
+event_broker = EventBroker()
+monitor = MonitorService(settings, store, events=event_broker)
 
 
 @asynccontextmanager
@@ -30,7 +33,7 @@ async def lifespan(app: FastAPI):
     await monitor.stop()
 
 
-app = FastAPI(title="Trading 212 Position Monitor", version="2.1.0", lifespan=lifespan)
+app = FastAPI(title="Trading 212 Position Monitor", version="2.2.0", lifespan=lifespan)
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.include_router(build_export_router(store, monitor))
@@ -50,6 +53,48 @@ def healthz() -> dict[str, object]:
 @app.get("/api/status")
 def api_status() -> dict[str, object]:
     return monitor.status()
+
+
+@app.get("/api/stream/status")
+def api_stream_status() -> dict[str, object]:
+    return {"available": True, **event_broker.stats()}
+
+
+@app.get("/api/stream")
+async def api_stream(request: Request) -> StreamingResponse:
+    async def events():
+        queue = event_broker.subscribe()
+        try:
+            initial = {
+                "status": monitor.status(),
+                "latest": monitor.latest(),
+                "stream": event_broker.stats(),
+            }
+            yield encode_sse("ready", initial)
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    # SSE comment heartbeat: keeps proxies from considering an idle
+                    # stream dead without forcing clients to process a fake event.
+                    yield ": heartbeat\n\n"
+                    continue
+                yield encode_sse(item.event, item.data, event_id=item.id)
+        finally:
+            event_broker.unsubscribe(queue)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/storage")
