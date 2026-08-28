@@ -8,7 +8,7 @@ from typing import Any
 from .config import Settings
 from .db import SnapshotStore
 from .metrics import normalize_account, normalize_position
-from .t212 import Trading212Client
+from .t212 import Trading212Client, Trading212Error
 
 
 @dataclass
@@ -98,8 +98,6 @@ class MonitorService:
     ) -> None:
         current = {position["ticker"]: position for position in positions}
 
-        # The first successful poll establishes a baseline. We intentionally do
-        # not emit OPEN events for positions that existed before the monitor started.
         if self._previous_positions is None:
             self._previous_positions = current
             return
@@ -211,3 +209,75 @@ class MonitorService:
             "account_rate_limit": self.state.account_rate_limit,
             "positions_rate_limit": self.state.positions_rate_limit,
         }
+
+    def _require_client(self) -> Trading212Client:
+        if self._client is None:
+            raise Trading212Error("Trading 212 client is not initialized")
+        return self._client
+
+    async def pending_orders(self) -> dict[str, Any]:
+        try:
+            response = await self._require_client().get_pending_orders()
+            data = response.data if isinstance(response.data, list) else []
+            return {"available": True, "items": data, "error": None}
+        except Trading212Error as exc:
+            return {
+                "available": False,
+                "items": [],
+                "error": str(exc),
+                "status_code": exc.status_code,
+            }
+
+    async def historical_orders(
+        self,
+        limit: int = 50,
+        ticker: str | None = None,
+        next_page_path: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response = await self._require_client().get_historical_orders(
+                limit=limit,
+                ticker=ticker,
+                next_page_path=next_page_path,
+            )
+            payload = response.data if isinstance(response.data, dict) else {}
+            return {
+                "available": True,
+                "items": payload.get("items") or [],
+                "next_page_path": payload.get("nextPagePath"),
+                "error": None,
+            }
+        except Trading212Error as exc:
+            return {
+                "available": False,
+                "items": [],
+                "next_page_path": None,
+                "error": str(exc),
+                "status_code": exc.status_code,
+            }
+
+    async def transactions(
+        self,
+        limit: int = 50,
+        next_page_path: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response = await self._require_client().get_transactions(
+                limit=limit,
+                next_page_path=next_page_path,
+            )
+            payload = response.data if isinstance(response.data, dict) else {}
+            return {
+                "available": True,
+                "items": payload.get("items") or [],
+                "next_page_path": payload.get("nextPagePath"),
+                "error": None,
+            }
+        except Trading212Error as exc:
+            return {
+                "available": False,
+                "items": [],
+                "next_page_path": None,
+                "error": str(exc),
+                "status_code": exc.status_code,
+            }
