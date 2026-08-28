@@ -24,6 +24,11 @@ class SnapshotStore:
         with self._connect() as conn:
             conn.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS schema_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS account_snapshots (
                     ts TEXT PRIMARY KEY,
                     currency TEXT NOT NULL,
@@ -55,6 +60,20 @@ class SnapshotStore:
 
                 CREATE INDEX IF NOT EXISTS idx_position_snapshots_ticker_ts
                 ON position_snapshots (ticker, ts DESC);
+
+                CREATE TABLE IF NOT EXISTS market_quotes (
+                    ts TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    isin TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    price REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    PRIMARY KEY (ts, ticker, source)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_market_quotes_ticker_source_ts
+                ON market_quotes (ticker, source, ts DESC);
 
                 CREATE TABLE IF NOT EXISTS position_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,6 +107,29 @@ class SnapshotStore:
                 CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts (ts DESC);
                 """
             )
+
+            # Seed the new market-data domain once from historical position snapshots.
+            # These are sampled Trading 212 position marks, not exchange OHLC bars.
+            migration_key = "market_quotes_backfill_v1"
+            migrated = conn.execute(
+                "SELECT value FROM schema_meta WHERE key = ?",
+                (migration_key,),
+            ).fetchone()
+            if migrated is None:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO market_quotes (
+                        ts, ticker, isin, name, currency, price, source
+                    )
+                    SELECT ts, ticker, '', name, currency, current_price, 't212_position'
+                    FROM position_snapshots
+                    WHERE current_price IS NOT NULL
+                    """
+                )
+                conn.execute(
+                    "INSERT INTO schema_meta (key, value) VALUES (?, ?)",
+                    (migration_key, "done"),
+                )
 
     def save_snapshot(
         self,
@@ -141,6 +183,26 @@ class SnapshotStore:
                         json.dumps(p["raw"], ensure_ascii=False),
                     )
                     for p in positions
+                ],
+            )
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO market_quotes (
+                    ts, ticker, isin, name, currency, price, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        ts,
+                        p["ticker"],
+                        p.get("isin") or "",
+                        p["name"],
+                        p["currency"],
+                        p["current_price"],
+                        "t212_position",
+                    )
+                    for p in positions
+                    if p.get("current_price") is not None
                 ],
             )
 
@@ -290,6 +352,50 @@ class SnapshotStore:
                 LIMIT ?
                 """,
                 (ticker, cutoff, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def market_quotes(
+        self,
+        ticker: str,
+        hours: int = 24,
+        source: str = "t212_position",
+        limit: int = 100000,
+    ) -> list[dict[str, Any]]:
+        hours = min(max(hours, 1), 24 * 30)
+        limit = min(max(limit, 1), 100000)
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT ts, ticker, isin, name, currency, price, source
+                FROM market_quotes
+                WHERE ticker = ? AND source = ? AND ts >= ?
+                ORDER BY ts ASC
+                LIMIT ?
+                """,
+                (ticker, source, cutoff, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def market_catalog(self, source: str = "t212_position") -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT ticker,
+                       MAX(isin) AS isin,
+                       MAX(name) AS name,
+                       currency,
+                       source,
+                       MIN(ts) AS first_ts,
+                       MAX(ts) AS last_ts,
+                       COUNT(*) AS observations
+                FROM market_quotes
+                WHERE source = ?
+                GROUP BY ticker, currency, source
+                ORDER BY ticker ASC
+                """,
+                (source,),
             ).fetchall()
         return [dict(row) for row in rows]
 
