@@ -19,6 +19,75 @@ def test_normalize_sell_order_signs_quantity_negative():
     assert order["price"] == 501.25
 
 
+def test_cancelled_zero_fill_is_not_normalized():
+    assert normalize_historical_order(
+        {
+            "ticker": "MSFT_US_EQ",
+            "side": "BUY",
+            "quantity": 5.0,
+            "filledQuantity": 0.0,
+            "status": "CANCELLED",
+            "dateCreated": "2026-08-28T12:00:00Z",
+        }
+    ) is None
+
+
+def test_rejected_zero_execution_is_not_normalized():
+    assert normalize_historical_order(
+        {
+            "ticker": "MSFT_US_EQ",
+            "side": "SELL",
+            "quantity": 3.0,
+            "executedQuantity": 0.0,
+            "status": "REJECTED",
+            "dateCreated": "2026-08-28T12:00:00Z",
+        }
+    ) is None
+
+
+def test_partially_filled_cancelled_order_keeps_actual_fill():
+    order = normalize_historical_order(
+        {
+            "ticker": "MSFT_US_EQ",
+            "side": "BUY",
+            "quantity": 5.0,
+            "filledQuantity": 1.25,
+            "status": "CANCELLED",
+            "filledAt": "2026-08-28T12:00:00Z",
+        }
+    )
+
+    assert order is not None
+    assert order["quantity"] == 1.25
+
+
+def test_cancelled_order_without_fill_field_is_not_normalized():
+    assert normalize_historical_order(
+        {
+            "ticker": "MSFT_US_EQ",
+            "side": "BUY",
+            "quantity": 5.0,
+            "status": "CANCELED",
+            "dateCreated": "2026-08-28T12:00:00Z",
+        }
+    ) is None
+
+
+def test_filled_order_without_explicit_fill_uses_order_quantity():
+    order = normalize_historical_order(
+        {
+            "ticker": "MSFT_US_EQ",
+            "side": "BUY",
+            "quantity": 2.0,
+            "status": "FILLED",
+            "dateExecuted": "2026-08-28T12:00:00Z",
+        }
+    )
+
+    assert order is not None
+    assert order["quantity"] == 2.0
+
+
 def test_reconcile_combines_multiple_fills_for_one_poll_delta():
     events = [
         {
