@@ -32,6 +32,22 @@
       <article class="card"><span>Open positions</span><strong id="positionCount">—</strong></article>
     </section>
 
+    <section id="allocationPanel" class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Allocation & concentration</h2>
+          <p class="muted">Position weights in the Trading 212 account currency</p>
+        </div>
+      </div>
+      <div class="allocation-summary" aria-label="Allocation summary">
+        <div><span>Invested value</span><strong id="allocationTotal">—</strong></div>
+        <div><span>Top 1 concentration</span><strong id="allocationTop1">—</strong></div>
+        <div><span>Top 3 concentration</span><strong id="allocationTop3">—</strong></div>
+      </div>
+      <div id="allocationBody" class="allocation-list"><div class="empty">Waiting for allocation data…</div></div>
+      <p id="allocationNote" class="allocation-note muted"></p>
+    </section>
+
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -124,5 +140,6 @@
     </section>
   </main>
   <script src="/static/app.js" defer></script>
+  <script src="/static/allocation.js" defer></script>
 </body>
 </html>
