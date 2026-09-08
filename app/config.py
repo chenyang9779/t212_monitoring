@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,11 +27,18 @@ class Settings:
         return f"https://{self.environment}.trading212.com/api/v0"
 
 
+def _finite_float(name: str, raw: str) -> float:
+    value = float(raw)
+    if not isfinite(value):
+        raise ValueError(f"{name} must be a finite number")
+    return value
+
+
 def _optional_float(name: str) -> float | None:
     raw = os.getenv(name, "").strip()
     if not raw:
         return None
-    value = float(raw)
+    value = _finite_float(name, raw)
     if value < 0:
         raise ValueError(f"{name} must be >= 0")
     return value
@@ -53,8 +61,14 @@ def load_settings() -> Settings:
     if environment not in {"demo", "live"}:
         raise ValueError("T212_ENV must be either 'demo' or 'live'")
 
-    poll_seconds = float(os.getenv("T212_POLL_SECONDS", "6"))
-    snapshot_seconds = float(os.getenv("T212_SNAPSHOT_SECONDS", "30"))
+    poll_seconds = _finite_float(
+        "T212_POLL_SECONDS",
+        os.getenv("T212_POLL_SECONDS", "6"),
+    )
+    snapshot_seconds = _finite_float(
+        "T212_SNAPSHOT_SECONDS",
+        os.getenv("T212_SNAPSHOT_SECONDS", "30"),
+    )
     if poll_seconds < 5:
         raise ValueError("T212_POLL_SECONDS must be >= 5 to respect the account-summary rate limit")
     if snapshot_seconds < poll_seconds:

@@ -251,9 +251,7 @@ def api_position_events(limit: int = Query(default=100, ge=1, le=500)) -> dict[s
 
 
 @app.get("/api/position-lifecycles")
-def api_position_lifecycles(
-    event_limit: int = Query(default=500, ge=1, le=500),
-) -> dict[str, object]:
+def api_position_lifecycles() -> dict[str, object]:
     latest = monitor.latest()
     events = position_events_all(settings.db_path)
     result = build_position_lifecycles(
