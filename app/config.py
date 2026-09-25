@@ -15,6 +15,7 @@ class Settings:
     api_key: str
     api_secret: str
     environment: str
+    demo_mode: bool
     poll_seconds: float
     snapshot_seconds: float
     db_path: Path
@@ -55,6 +56,17 @@ def _optional_positive_int(name: str) -> int | None:
 
 
 def load_settings() -> Settings:
+    # Check demo_mode BEFORE reading API credentials, because load_dotenv()
+    # (at module level) may have populated them from .env. In demo mode we
+    # clear them so that no broker client is created.
+    demo_mode = os.getenv("T212_DEMO", "").lower() == "true"
+    if demo_mode:
+        # When demo mode is enabled, clear API credentials and force the
+        # environment to 'demo' so that load_dotenv() values don't leak.
+        os.environ.pop("T212_API_KEY", None)
+        os.environ.pop("T212_API_SECRET", None)
+        os.environ.pop("T212_ENV", None)  # Will fall back to default 'demo'
+
     api_key = os.getenv("T212_API_KEY", "").strip()
     api_secret = os.getenv("T212_API_SECRET", "").strip()
     environment = os.getenv("T212_ENV", "demo").strip().lower()
@@ -80,6 +92,7 @@ def load_settings() -> Settings:
         api_key=api_key,
         api_secret=api_secret,
         environment=environment,
+        demo_mode=demo_mode,
         poll_seconds=poll_seconds,
         snapshot_seconds=snapshot_seconds,
         db_path=db_path,

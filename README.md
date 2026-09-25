@@ -1,114 +1,163 @@
 # Trading 212 Position Monitor
 
-A read-only Trading 212 portfolio monitor designed so a strategy/execution layer can be added later without rewriting the monitoring stack.
+A self-hosted, read-only Trading 212 portfolio monitoring and analytics dashboard.
 
-## What it does
+> **Unofficial:** This is an independent project and is **not affiliated with or endorsed by Trading 212**. Trading 212 is a registered trademark of its respective owners.
 
-- Polls Trading 212 account summary and open positions.
-- Shows account value, cash, realized/unrealized P&L, and all open positions.
-- Stores account and position snapshots in SQLite.
-- Detects position OPEN / ADD / REDUCE / CLOSE events while the monitor is running.
-- Provides allocation, drawdown, normalized position comparison, P/L attribution, and instrument exposure views.
-- Exposes read-only pending orders, historical orders, and transactions when the API key has those permissions.
-- Caches Trading 212 instrument metadata for quoted-currency and instrument-type exposure.
-- Stores sampled position marks in a separate market-data table for downstream analytics.
-- Exposes CSV and JSONL download endpoints for downstream notebooks and services.
-- Exposes an SSE live stream for browsers and other read-only consumers.
-- Provides liveness/readiness probes, request IDs, startup diagnostics, and structured application logs.
-- Contains no order-placement code.
+[![CI](https://github.com/chenyang9779/t212_monitoring/actions/workflows/ci.yml/badge.svg)](https://github.com/chenyang9779/t212_monitoring/actions)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
+![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)
+![License: MIT](https://img.shields.io/badge/license-MIT-007EC7.svg)
 
-## Security model
+![Dashboard Screenshot](docs/images/dashboard-overview.png)
 
-Create a Trading 212 API key with read-only permissions for account/portfolio data. Keep the key and secret only in `.env`. Do not commit `.env`.
+## Features
 
-For live usage, consider restricting the API key to the host's fixed IP/CIDR in Trading 212 settings.
+- Live account and open-position monitoring
+- Historical SQLite snapshots with WAL mode
+- Position OPEN / ADD / REDUCE / CLOSE lifecycle tracking
+- Allocation and exposure analytics (quoted-currency & instrument-type)
+- Drawdown analysis and P&L attribution
+- Pending orders, historical orders, and transactions (where API permissions allow)
+- Instrument metadata caching
+- Sampled position marks for market-data analytics
+- CSV / JSONL downloads with formula-injection mitigation
+- SSE (Server-Sent Events) live feed for browsers
+- Health/readiness probes
+- Docker-first deployment, single-worker process-local architecture
+- **Read-only:** contains no order-placement code
 
-If a separate quant/execution service is added later, give any order-capable credentials to that service only. Do not add execution permissions to the monitoring key.
+## Screenshots
 
-## Docker deployment
+> **Note:** All screenshots use synthetic / demo portfolio data — no real account or transaction information is shown.
 
-Docker Compose is the normal way to run the monitor. The image contains the application and Python dependencies; credentials remain outside the image in the local `.env` file.
+| Dashboard Overview | Position Lifecycle & Analytics |
+|---|---|
+| ![Dashboard](docs/images/dashboard-overview.png) | ![Lifecycle](docs/images/position-lifecycle.png) |
 
-Requirements:
+## Quick Start
+
+```bash
+git clone https://github.com/chenyang9779/t212_monitoring.git
+cd t212_monitoring
+cp .env.example .env
+mkdir -p data
+```
+
+Edit `.env` with your Trading 212 API credentials:
+
+```dotenv
+T212_API_KEY=your_api_key_here
+T212_API_SECRET=your_api_secret_here
+T212_ENV=demo
+```
+
+> **Start with `T212_ENV=demo`** to validate the integration without touching a live account.
+
+```bash
+docker compose up -d --build
+```
+
+Open the dashboard:
+
+```
+http://127.0.0.1:8000
+```
+
+## Security
+
+> **Security note:** This application exposes sensitive portfolio and account information (balance, positions, P&L, transaction history) and does **not** include built-in user authentication. Keep it bound to localhost unless placed behind an authenticated private-access layer.
+
+- Use a **read-only** Trading 212 API key. Do not grant service execution or order permissions to the monitoring key.
+- Keep API credentials only in `.env`. **Never commit `.env` or hard-code credentials in source.**
+- The service binds to `127.0.0.1` by default. Do not expose the port directly to the internet.
+- For remote access, use an SSH tunnel, Tailscale, VPN, or a reverse proxy with authentication.
+- For live accounts, consider restricting the API key to your host's IP/CIDR in Trading 212 settings.
+- The SQLite database at `data/monitor.db` stores historical portfolio and transaction data. Treat it as private account data.
+- If a separate quant or execution service is added later, give order-capable credentials to that service only. The dependency must be one-way: quant/execution reads from the monitor; the monitor does not depend on them.
+
+## Table of Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Quick Start](#quick-start)
+- [Security](#security)
+- [Docker Deployment](#docker-deployment)
+- [Configuration](#configuration)
+- [API Routes](#api-routes)
+- [Operational Hardening](#operational-hardening)
+- [Instrument Metadata and Exposure](#instrument-metadata-and-exposure)
+- [SSE Live Stream](#sse-live-stream)
+- [Export API](#export-api)
+- [Market-Data Model](#market-data-model)
+- [Data Model Note](#data-model-note)
+- [Quant Architecture](#quant-architecture)
+- [Development](#development)
+- [Contributing](CONTRIBUTING.md)
+- [License](#license)
+- [Disclaimer](#disclaimer)
+
+## Docker Deployment
+
+Docker Compose is the primary deployment method. The image contains the application and Python dependencies; credentials remain outside the image in the local `.env` file.
+
+**Requirements:**
 
 - Docker Engine
 - Docker Compose plugin (`docker compose`)
 
-Initial setup:
+**Initial setup:**
 
 ```bash
 cp .env.example .env
 mkdir -p data
 ```
 
-Edit `.env` and set `T212_API_KEY` and `T212_API_SECRET`. Keep `T212_ENV=demo` while validating the integration. Switch to `T212_ENV=live` only when you want to read the real account.
-
-Build and launch:
+**Build and launch:**
 
 ```bash
 docker compose up -d --build
 ```
 
-Check the container:
+**Check the container:**
 
 ```bash
 docker compose ps
 docker compose logs -f monitor
 ```
 
-Open:
+Open the dashboard at:
 
-```text
+```
 http://127.0.0.1:8000
 ```
 
-The Compose configuration publishes port `8000` on all host interfaces by default. For local-only access, set this in `.env`:
+The default port binding is `127.0.0.1:8000` (localhost only). To change:
 
 ```dotenv
 T212_BIND_ADDRESS=127.0.0.1
-```
-
-To use a different host port:
-
-```dotenv
-T212_HOST_PORT=8080
+T212_HOST_PORT=8000
 ```
 
 SQLite data is persisted through the bind mount:
 
-```text
+```
 ./data -> /app/data
 ```
 
-Inside the container, `T212_DB_PATH` is forced to `/app/data/monitor.db`, so an existing local `data/monitor.db` continues to be used after moving to Docker. The SQLite `-wal` and `-shm` sidecar files may appear in `data/` while the application is running; that is normal WAL-mode behavior.
+The image runs exactly **one Uvicorn worker**. This is intentional because the monitor loop, SSE event broker, and metadata cache are process-local.
 
-The image runs exactly one Uvicorn worker. This is intentional because the monitor loop, SSE event broker, and metadata cache are process-local. The image also uses a five-second Uvicorn graceful-shutdown timeout so an open SSE browser connection cannot keep container shutdown waiting indefinitely.
-
-Stop the service without deleting the database:
+**Stop the service (database preserved):**
 
 ```bash
 docker compose down
 ```
 
-Update and restart:
+**Update and restart:**
 
 ```bash
 git pull origin master
 docker compose up -d --build
-```
-
-The Docker image has a built-in `/healthz` health check. `docker compose ps` will report the container as healthy after startup succeeds. The local `.env`, SQLite files, tests, Git metadata, and virtual environments are excluded from the Docker build context.
-
-## Direct Python development
-
-Running directly on the host is still supported for development. Python 3.11+ is recommended.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ## Configuration
@@ -125,7 +174,7 @@ T212_POSITION_LOSS_ALERT_PCT=
 T212_TOTAL_LOSS_ALERT_PCT=
 
 # Docker Compose only
-T212_BIND_ADDRESS=0.0.0.0
+T212_BIND_ADDRESS=127.0.0.1
 T212_HOST_PORT=8000
 ```
 
@@ -135,115 +184,52 @@ Alert thresholds are disabled when blank. Example: a value of `8` means an alert
 
 The poll interval must be at least five seconds because the account-summary endpoint is rate-limited more strictly than the positions endpoint.
 
-## API routes exposed by this monitor
+## API Routes
 
-Core monitoring:
+### Core monitoring
 
-- `GET /healthz`
-- `GET /readyz`
-- `GET /api/operations`
-- `GET /api/status`
-- `GET /api/storage`
-- `GET /api/latest`
-- `GET /api/instruments[?refresh=true]`
-- `GET /api/exposure[?refresh_metadata=true]`
-- `GET /api/history?hours=24`
-- `GET /api/position-history?ticker=...&hours=24`
-- `GET /api/position-events?limit=100`
-- `GET /api/position-lifecycles`
-- `GET /api/data-quality?hours=24`
-- `GET /api/reconciliation?event_limit=50&tolerance_seconds=180`
-- `GET /api/drawdown?hours=24[&ticker=...]`
-- `GET /api/pnl-attribution`
-- `GET /api/alerts?limit=50`
+- `GET /healthz` — liveness probe
+- `GET /readyz` — readiness probe (200 or 503)
+- `GET /api/status` — current monitor status
+- `GET /api/operations` — startup report, readiness, SSE stream counters
+- `GET /api/storage` — SQLite database status
+- `GET /api/latest` — latest portfolio state
+- `GET /api/instruments[?refresh=true]` — instrument metadata
+- `GET /api/exposure[?refresh_metadata=true]` — allocation & exposure
+- `GET /api/history?hours=24` — account history
+- `GET /api/position-history?ticker=...&hours=24` — position history
+- `GET /api/position-events?limit=100` — lifecycle events
+- `GET /api/position-lifecycles` — reconstructed position lifecycles
+- `GET /api/data-quality?hours=24` — data quality indicators
+- `GET /api/reconciliation?event_limit=50&tolerance_seconds=180` — event reconciliation
+- `GET /api/drawdown?hours=24[&ticker=...]` — drawdown analytics
+- `GET /api/pnl-attribution` — P&L attribution
+- `GET /api/alerts?limit=50` — monitor alerts
 
-Live stream:
+### Live stream
 
-- `GET /api/stream`
-- `GET /api/stream/status`
+- `GET /api/stream` — SSE live feed
+- `GET /api/stream/status` — stream subscriber stats
 
-Broker history:
+### Broker data
 
-- `GET /api/orders/pending`
-- `GET /api/orders/history?limit=50`
-- `GET /api/transactions?limit=50`
+- `GET /api/orders/pending` — pending orders
+- `GET /api/orders/history?limit=50` — historical orders
+- `GET /api/transactions?limit=50` — transactions
 
-Stored market-data interface:
+### Market-data store
 
-- `GET /api/market/catalog`
-- `GET /api/market/quotes?ticker=...&hours=24`
-- `GET /api/market/bars?ticker=...&hours=24&minutes=5`
+- `GET /api/market/catalog` — market data catalog
+- `GET /api/market/quotes?ticker=...&hours=24` — sampled quotes
+- `GET /api/market/bars?ticker=...&hours=24&minutes=5` — aggregated bars
 
-Supported sampled-bar intervals are `1, 5, 15, 30, 60, 240, 1440` minutes.
-
-## Operational hardening
-
-`GET /healthz` is a lightweight liveness endpoint. It answers while the process is running and also exposes whether startup checks found configuration or local-resource problems.
-
-`GET /readyz` is stricter. It returns HTTP `200` only when startup checks succeeded, SQLite is queryable, the broker monitor is connected, and the last successful Trading 212 sync is fresh. Otherwise it returns HTTP `503` with machine-readable reasons such as `broker_not_connected`, `broker_sync_stale`, `database_unavailable`, or `startup_checks_failed`.
-
-`GET /api/operations` exposes the startup report, current readiness calculation, and SSE stream counters for local/operator diagnostics.
-
-Every HTTP request receives an `X-Request-ID` response header. A caller-supplied `X-Request-ID` is preserved only when it matches a conservative safe-character policy; otherwise the server generates a new ID. Application request logs are emitted as one-line JSON with UTC timestamps, log level, request ID, method, path, status code, and duration. Unhandled exceptions are logged with the same request ID.
-
-The FastAPI lifespan logs explicit startup/stopping/stopped events and always awaits `monitor.stop()` during shutdown, so the polling task and HTTP client are closed before process exit.
-
-Example probes:
-
-```bash
-curl -i http://127.0.0.1:8000/healthz
-curl -i http://127.0.0.1:8000/readyz
-curl -s http://127.0.0.1:8000/api/operations | python -m json.tool
-```
-
-For a service manager or container orchestrator, use `/healthz` as the liveness probe and `/readyz` as the readiness probe.
-
-## Instrument metadata and exposure
-
-`GET /api/instruments` fetches Trading 212's read-only instrument metadata and caches it in memory for six hours. `?refresh=true` forces a refresh. Metadata failures do not mark the core portfolio monitor disconnected; if a previous metadata response exists, the endpoint can continue serving it as stale cache.
-
-`GET /api/exposure` joins current open positions to that metadata and aggregates **account-currency position values** by:
-
-- instrument quoted currency, and
-- Trading 212 instrument type.
-
-The exposure code deliberately does not invent sector or country classifications. Quoted currency is also not treated as issuer domicile or economic/revenue exposure. A future provider can add sector/country metadata under a separate source without changing that distinction.
-
-## SSE live stream
-
-`GET /api/stream` is a read-only Server-Sent Events feed. A new connection first receives a `ready` event containing current monitor status and the latest portfolio state. Subsequent events are emitted from the existing monitor polling loop; opening the stream does not create extra Trading 212 polling requests.
-
-Current event names:
-
-- `ready` — current monitor status and latest portfolio on connection.
-- `portfolio` — normalized account and open-position state after a successful Trading 212 poll.
-- `snapshot` — emitted after a local SQLite snapshot is saved.
-- `position_event` — an observed OPEN / ADD / REDUCE / CLOSE quantity change.
-- `alert` — a newly activated monitor alert.
-- `monitor_error` — a Trading 212 monitoring error.
-- `maintenance` / `maintenance_error` — optional retention-maintenance status.
-
-The server sends comment heartbeats every 15 seconds when no event is available. Each subscriber has a bounded in-memory queue; a slow consumer drops its oldest pending event rather than blocking the broker polling loop. This stream is therefore intended for live state notification, not as an authoritative durable event log. Durable consumers should use SQLite/export/history endpoints to recover state after disconnects.
-
-The browser dashboard opens the SSE stream automatically. Existing periodic refreshes remain as a fallback while the dashboard is progressively migrated toward event-driven updates.
-
-You can inspect the feed directly:
-
-```bash
-curl -N http://127.0.0.1:8000/api/stream
-```
-
-And inspect stream counters:
-
-```bash
-curl -s http://127.0.0.1:8000/api/stream/status | python -m json.tool
-```
+Supported sampled-bar intervals: `1, 5, 15, 30, 60, 240, 1440` minutes.
 
 ## Export API
 
-All export endpoints are read-only and accept `format=csv` or `format=jsonl`. CSV is the default. Responses include `Content-Disposition` and an `X-Export-Rows` header.
+All export endpoints are read-only and accept `format=csv` (default) or `format=jsonl`.
 
-Local datasets:
+### Local datasets
 
 - `GET /api/export/positions?format=csv`
 - `GET /api/export/account-history?hours=24&format=csv`
@@ -253,42 +239,69 @@ Local datasets:
 - `GET /api/export/market-quotes?ticker=...&hours=24&format=csv`
 - `GET /api/export/market-bars?ticker=...&hours=24&minutes=5&format=csv`
 
-The account-history, position-history, and position-events local exports read the complete requested local dataset rather than inheriting the bounded dashboard history limits.
-
-Broker-backed datasets:
+### Broker-backed datasets
 
 - `GET /api/export/orders/history?limit=50&format=csv`
 - `GET /api/export/transactions?limit=50&format=csv`
 
-Broker-backed exports intentionally fetch at most one Trading 212 history page per request. If more broker pages exist, the response includes `X-Export-Has-More: true`. This prevents a single download request from recursively consuming the broker history rate limit.
+Broker-backed exports intentionally fetch at most one Trading 212 history page per request. If more broker pages exist, the response includes `X-Export-Has-More: true` to prevent rate-limit exhaustion.
 
-Nested broker payloads are flattened into dotted CSV columns such as `order.ticker`. JSONL retains one JSON object per line. CSV string values that begin with spreadsheet formula prefixes are escaped to reduce formula-injection risk when files are opened in Excel or similar software.
+CSV string values starting with formula prefixes (`=`, `+`, `-`, `@`) are prefixed with `'` to reduce spreadsheet formula-injection risk.
 
-Examples:
+## Operational Hardening
 
-```bash
-curl -OJ "http://127.0.0.1:8000/api/export/positions"
-curl -OJ "http://127.0.0.1:8000/api/export/account-history?hours=168&format=csv"
-curl -OJ "http://127.0.0.1:8000/api/export/market-bars?ticker=AAPL_US_EQ&hours=168&minutes=5&format=jsonl"
-```
+`GET /healthz` is a lightweight liveness endpoint. It answers while the process is running and reports any startup configuration or resource issues.
 
-## Market-data model
+`GET /readyz` is stricter. It returns HTTP `200` only when startup checks succeeded, SQLite is queryable, the broker monitor is connected, and the last successful Trading 212 sync is fresh. Otherwise it returns HTTP `503` with reasons such as `broker_not_connected`, `broker_sync_stale`, `database_unavailable`, or `startup_checks_failed`.
 
-The monitor now has a separate `market_quotes` domain. Every saved portfolio snapshot copies the Trading 212 `currentPrice` for each open position into `market_quotes` with source `t212_position`.
+`GET /api/operations` exposes the startup report, current readiness, and SSE stream counters for diagnostics.
 
-On first startup after this schema is introduced, existing `position_snapshots.current_price` values are backfilled once into `market_quotes`.
+Every HTTP request receives an `X-Request-ID` response header. Application request logs are emitted as one-line JSON with UTC timestamps, log level, request ID, method, path, status code, and duration. Unhandled exceptions are logged with the same request ID.
 
-Important: these are **sampled broker position marks**, not exchange tick data and not authoritative exchange OHLC bars. The `/api/market/bars` endpoint aggregates the observed samples into OHLC-style buckets for research convenience. For production-grade quant research, add a dedicated external market-data provider and store that feed under a separate source.
+The FastAPI lifespan logs explicit startup/stopping/stopped events and always awaits `monitor.stop()` during shutdown.
 
-## Data model note
+## Instrument Metadata and Exposure
 
-Trading 212 reports account summary values in the primary account currency. Position `averagePricePaid` and `currentPrice` are instrument-currency values. Cross-position portfolio analytics therefore use account-currency wallet-impact fields when available and avoid summing incompatible instrument currencies.
+`GET /api/instruments` fetches Trading 212's read-only instrument metadata and caches it in memory for six hours. `?refresh=true` forces a refresh. Metadata failures do not mark the core portfolio monitor disconnected.
 
-## Quant architecture
+`GET /api/exposure` joins current open positions to that metadata and aggregates **account-currency position values** by:
+
+- instrument quoted currency, and
+- Trading 212 instrument type.
+
+The exposure code deliberately does not invent sector or country classifications.
+
+## SSE Live Stream
+
+`GET /api/stream` is a read-only Server-Sent Events feed. A new connection first receives a `ready` event with current monitor status and latest portfolio state. Subsequent events are emitted from the existing monitor polling loop; opening the stream does not create extra Trading 212 polling requests.
+
+Current event names:
+
+- `ready` — current monitor status and latest portfolio on connection.
+- `portfolio` — normalized account and open-position state after a successful poll.
+- `snapshot` — emitted after a local SQLite snapshot is saved.
+- `position_event` — an observed OPEN / ADD / REDUCE / CLOSE quantity change.
+- `alert` — a newly activated monitor alert.
+- `monitor_error` — a Trading 212 monitoring error.
+- `maintenance` / `maintenance_error` — retention-maintenance status.
+
+The server sends comment heartbeats every 15 seconds when no event is available. Each subscriber has a bounded in-memory queue; slow consumers drop oldest pending events rather than blocking the broker polling loop.
+
+## Market-Data Model
+
+The monitor stores sampled Trading 212 position marks in a separate `market_quotes` table with source `t212_position`.
+
+> **Important:** These are **sampled broker position marks**, not exchange tick data and not authoritative exchange OHLC bars. The `/api/market/bars` endpoint aggregates the observed samples into OHLC-style buckets for research convenience. For production-grade quant research, add a dedicated external market-data provider and store that feed under a separate source.
+
+## Data Model Note
+
+Trading 212 reports account summary values in the primary account currency. Position `averagePricePaid` and `currentPrice` are instrument-currency values. Cross-position portfolio analytics use account-currency wallet-impact fields when available and avoid summing incompatible instrument currencies.
+
+## Quant Architecture
 
 The quant component should be a separate service or repository. The monitor should remain the read-only broker-state and data-capture service.
 
-Recommended boundary:
+**Recommended boundary:**
 
 ```text
 Trading 212
@@ -303,15 +316,45 @@ t212_monitoring
             │
             │ read-only data contract
             ▼
-quant_service
-    ├── feature generation
-    ├── signals
-    ├── portfolio construction
-    ├── risk
-    ├── backtest / paper mode
-    └── optional execution adapter
+    quant_service
+        ├── feature generation
+        ├── signals
+        ├── portfolio construction
+        ├── risk
+        ├── backtest / paper mode
+        └── optional execution adapter
 ```
 
 For a local prototype, the quant service can open `data/monitor.db` in SQLite read-only mode. For a cleaner long-term boundary, prefer consuming the monitor's HTTP API, export endpoints, or SSE notifications so the quant service does not depend on this repository's SQLite schema.
 
-The monitor must never depend on the quant service to keep collecting broker state. The dependency should be one-way: quant reads monitoring data; monitoring does not import strategy code.
+The monitor must never depend on the quant service to keep collecting broker state. The dependency is one-way: quant reads monitoring data; monitoring does not import strategy code.
+
+## Development
+
+Running directly on the host is supported for development. Python 3.11+ is recommended.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m compileall -q app tests
+python -m pytest -q
+```
+
+Run the server directly:
+
+```bash
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting pull requests, running tests, and handling security-sensitive changes.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## Disclaimer
+
+This software is provided for monitoring and research purposes. It is not financial advice and does not execute trades.

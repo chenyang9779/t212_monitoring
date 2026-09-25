@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -50,6 +51,7 @@ class MonitorService:
         self._instrument_metadata_monotonic = 0.0
         self._active_alert_keys: set[str] = set()
         self._previous_positions: dict[str, dict[str, Any]] | None = None
+        self._demo_mode = settings.demo_mode
 
     def _publish(self, event: str, data: dict[str, Any]) -> None:
         if self.events is not None:
@@ -57,6 +59,12 @@ class MonitorService:
 
     async def start(self) -> None:
         self._stop.clear()
+        if self._demo_mode:
+            # In demo mode we seed a synthetic portfolio and load state
+            # directly from the local database.  No broker connection is made.
+            await self._seed_demo()
+            self.state.last_error = None
+            return
         try:
             self._client = Trading212Client(self.settings)
         except Exception as exc:
@@ -75,6 +83,67 @@ class MonitorService:
                 pass
         if self._client:
             await self._client.close()
+
+    async def _seed_demo(self) -> None:
+        """Seed the database with synthetic data and load the latest state."""
+
+        def _do_seed() -> dict[str, Any] | None:
+            from .demo import seed_demo_data
+
+            seed_demo_data(self.store.path)
+            # Return latest account from database so the dashboard has data
+            rows = self.store.history(hours=1)
+            if rows:
+                return rows[-1]
+            return None
+
+        latest_row = await asyncio.to_thread(_do_seed)
+
+        if latest_row is None:
+            self.state.last_error = "Demo seed produced no account snapshot"
+            self._publish("monitor_error", {"error": self.state.last_error})
+            return
+
+        self.state.account = latest_row
+        self.state.last_sync = datetime.now(timezone.utc).isoformat()
+        self.state.last_error = None
+
+        # Load current positions from the database
+        # (we query the most recent position snapshot per ticker)
+        from .db import SnapshotStore
+
+        pos_rows: list[dict[str, Any]] = []
+        with sqlite3.connect(self.store.path, timeout=10) as conn:
+            conn.row_factory = sqlite3.Row
+            # Get the latest snapshot per ticker
+            cur = conn.execute(
+                """
+                SELECT ts, ticker, name, currency, quantity, average_price,
+                       current_price, cost_local, market_value_local,
+                       pnl_local, pnl_pct
+                FROM position_snapshots
+                WHERE ts = (
+                    SELECT MAX(ts) FROM position_snapshots ps2
+                    WHERE ps2.ticker = position_snapshots.ticker
+                )
+                AND quantity > 0
+                ORDER BY ticker
+                """
+            ).fetchall()
+            for row in cur:
+                pos_rows.append(dict(row))
+
+        self.state.positions = pos_rows
+
+        if self.events is not None:
+            self._publish(
+                "portfolio",
+                {
+                    "account": latest_row,
+                    "positions": pos_rows,
+                    "last_sync": self.state.last_sync,
+                },
+            )
 
     async def _run(self) -> None:
         loop = asyncio.get_running_loop()
@@ -295,11 +364,13 @@ class MonitorService:
     def status(self) -> dict[str, Any]:
         return {
             "environment": self.settings.environment,
+            "demo_mode": self._demo_mode,
             "poll_seconds": self.settings.poll_seconds,
             "snapshot_seconds": self.settings.snapshot_seconds,
             "last_sync": self.state.last_sync,
             "last_error": self.state.last_error,
-            "connected": self.state.last_sync is not None and self.state.last_error is None,
+            "connected": self.state.last_sync is not None
+            and self.state.last_error is None,
             "account_rate_limit": self.state.account_rate_limit,
             "positions_rate_limit": self.state.positions_rate_limit,
             "raw_retention_days": self.settings.raw_retention_days,

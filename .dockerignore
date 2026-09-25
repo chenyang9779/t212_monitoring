@@ -6,9 +6,15 @@ __pycache__
 .pytest_cache
 .env
 .env.*
-!.env.example
 data
 tests
 *.db
 *.db-shm
 *.db-wal
+.DS_Store
+.idea/
+.vscode/
+*.egg-info/
+htmlcov/
+.mypy_cache/
+.coverage

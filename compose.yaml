@@ -10,7 +10,7 @@ services:
     environment:
       T212_DB_PATH: /app/data/monitor.db
     ports:
-      - "${T212_BIND_ADDRESS:-0.0.0.0}:${T212_HOST_PORT:-8000}:8000"
+      - "${T212_BIND_ADDRESS:-127.0.0.1}:${T212_HOST_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
     stop_grace_period: 10s
