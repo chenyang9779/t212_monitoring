@@ -27,12 +27,12 @@ jobs:
       T212_DB_PATH: /tmp/t212-monitor-ci.db
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -91,13 +91,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -105,7 +105,7 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install pip-audit
 
       - name: Run pip-audit
-        run: python -m pip-audit --requirement requirements.txt
+        run: python -m pip_audit --requirement requirements.txt
 
       - name: Install gitleaks
         run: |
