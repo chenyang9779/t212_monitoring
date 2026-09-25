@@ -35,6 +35,8 @@ A self-hosted, read-only Trading 212 portfolio monitoring and analytics dashboar
 |---|---|
 | ![Dashboard](docs/images/dashboard-overview.png) | ![Lifecycle](docs/images/position-lifecycle.png) |
 
+> **Warning:** These screenshots show synthetic demo data. All values — balance, P&L, allocation, drawdown, lifecycle events — are fabricated and **not** representative of any real account or accurate chart output.
+
 ## Quick Start
 
 ### Try the UI with synthetic data
