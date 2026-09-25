@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/chenyang9779/t212_monitoring/security/advisories/new
+    about: Report security vulnerabilities privately through GitHub Security Advisory

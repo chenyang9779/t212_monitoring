@@ -14,11 +14,6 @@ from app.demo import seed_demo_data
 from app.service import MonitorService
 
 
-# ---------------------------------------------------------------------------
-# Demo data generator tests
-# ---------------------------------------------------------------------------
-
-
 class TestDemoDataGenerator:
     """Verify that seed_demo_data produces valid data through the store."""
 
@@ -292,3 +287,84 @@ class TestDemoServiceMode:
         # Should NOT be in demo mode
         assert service._demo_mode is False
         assert service._client is not None
+
+
+# ---------------------------------------------------------------------------
+# Demo mode isolation — critical regression tests
+# ---------------------------------------------------------------------------
+
+
+class TestDemoModeIsolation:
+    """Regression tests: demo mode must never overwrite live data."""
+
+    def test_demo_default_db_is_separate(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """T212_DEMO=true must default to data/demo-monitor.db, not data/monitor.db."""
+        monkeypatch.setenv("T212_POLL_SECONDS", "6")
+        monkeypatch.setenv("T212_SNAPSHOT_SECONDS", "30")
+        monkeypatch.setenv("T212_DEMO", "true")
+        monkeypatch.delenv("T212_API_KEY", raising=False)
+        monkeypatch.delenv("T212_API_SECRET", raising=False)
+        # Explicitly unset DB_PATH so the default is used
+        monkeypatch.delenv("T212_DB_PATH", raising=False)
+
+        settings = load_settings()
+        assert settings.demo_mode is True
+        assert settings.db_path.name == "demo-monitor.db"
+
+    def test_demo_does_not_mutation_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """load_settings(demo) must not mutate os.environ."""
+        monkeypatch.setenv("T212_POLL_SECONDS", "6")
+        monkeypatch.setenv("T212_SNAPSHOT_SECONDS", "30")
+        monkeypatch.setenv("T212_DEMO", "true")
+        monkeypatch.setenv("T212_API_KEY", "pre-existing-key")
+        monkeypatch.setenv("T212_API_SECRET", "pre-existing-secret")
+
+        before_keys = dict(os.environ)
+        settings = load_settings()
+
+        # Verify os.environ was NOT mutated
+        after_keys = dict(os.environ)
+        assert before_keys == after_keys, "load_settings mutated os.environ"
+
+        # But settings should still have empty creds
+        assert settings.demo_mode is True
+        assert settings.api_key == ""
+        assert settings.api_secret == ""
+
+    def test_demo_does_not_mutation_env_when_not_demo(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Non-demo mode should also not mutate os.environ."""
+        monkeypatch.setenv("T212_POLL_SECONDS", "6")
+        monkeypatch.setenv("T212_SNAPSHOT_SECONDS", "30")
+        monkeypatch.setenv("T212_DEMO", "false")
+        monkeypatch.setenv("T212_API_KEY", "my-key")
+        monkeypatch.setenv("T212_API_SECRET", "my-secret")
+
+        before_keys = dict(os.environ)
+        settings = load_settings()
+        after_keys = dict(os.environ)
+
+        assert before_keys == after_keys
+        assert settings.api_key == "my-key"
+        assert settings.api_secret == "my-secret"
+
+    def test_demo_db_does_not_exist_yet_is_fine(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Demo mode must work even if demo-monitor.db does not exist yet."""
+        db_path = tmp_path / "fresh-demo.db"
+        assert not db_path.exists()
+        monkeypatch.setenv("T212_DB_PATH", str(db_path))
+        monkeypatch.setenv("T212_DEMO", "true")
+        monkeypatch.setenv("T212_POLL_SECONDS", "6")
+        monkeypatch.setenv("T212_SNAPSHOT_SECONDS", "30")
+        monkeypatch.delenv("T212_API_KEY", raising=False)
+        monkeypatch.delenv("T212_API_SECRET", raising=False)
+
+        settings = load_settings()
+        store = SnapshotStore(settings.db_path)
+        service = MonitorService(settings, store)
+
+        import asyncio
+
+        asyncio.run(service.start())
+        assert service._demo_mode is True
+        assert service.state.account is not None
+

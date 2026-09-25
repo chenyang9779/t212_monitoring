@@ -45,6 +45,7 @@ startup_report = startup_checks(
     static_dir=static_dir,
     api_key=settings.api_key,
     api_secret=settings.api_secret,
+    demo_mode=settings.demo_mode,
 )
 
 

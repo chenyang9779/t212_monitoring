@@ -70,12 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --detach --name t212-monitoring-ci \
-            --env T212_API_KEY=ci-placeholder-key \
-            --env T212_API_SECRET=ci-placeholder-secret \
-            --env T212_ENV=demo \
-            --env T212_POLL_SECONDS=6 \
-            --env T212_SNAPSHOT_SECONDS=30 \
-            --env T212_DB_PATH=/tmp/monitor.db \
+            --env T212_DEMO=true \
             --publish 127.0.0.1:18000:8000 \
             t212-monitoring:ci
           trap 'docker rm --force t212-monitoring-ci >/dev/null 2>&1 || true' EXIT
@@ -99,19 +94,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip && python -m pip install pip-audit
 
       - name: Run pip-audit
-        run: python -m pip_audit --requirement requirements.txt
+        run: python -m pip-audit --requirement requirements.txt
+
+      - name: Install gitleaks
+        run: |
+          arch=$(uname -m)
+          case "$arch" in
+            x86_64) gitleaks_arch="amd64" ;;
+            aarch64|arm64) gitleaks_arch="arm64" ;;
+            *) gitleaks_arch="amd64" ;;
+          esac
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_${gitleaks_arch}.tar.gz | tar xz -C /usr/local/bin gitleaks
 
       - name: Run gitleaks scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gitleaks detect --source . --log-opts="--all" --redact

@@ -37,6 +37,10 @@ A self-hosted, read-only Trading 212 portfolio monitoring and analytics dashboar
 
 ## Quick Start
 
+### Try the UI with synthetic data
+
+No Trading 212 account or API credentials are required.
+
 ```bash
 git clone https://github.com/chenyang9779/t212_monitoring.git
 cd t212_monitoring
@@ -44,25 +48,45 @@ cp .env.example .env
 mkdir -p data
 ```
 
-Edit `.env` with your Trading 212 API credentials:
+Set demo mode in `.env`:
 
 ```dotenv
-T212_API_KEY=your_api_key_here
-T212_API_SECRET=your_api_secret_here
-T212_ENV=demo
+T212_DEMO=true
 ```
-
-> **Start with `T212_ENV=demo`** to validate the integration without touching a live account.
 
 ```bash
 docker compose up -d --build
 ```
 
-Open the dashboard:
+Open the dashboard at `http://127.0.0.1:8000`.
 
+### Connect a Trading 212 account
+
+You will need a read-only API key from Trading 212.
+
+```bash
+git clone https://github.com/chenyang9779/t212_monitoring.git
+cd t212_monitoring
+cp .env.example .env
+mkdir -p data
 ```
-http://127.0.0.1:8000
+
+Edit `.env` with your Trading 212 read-only credentials:
+
+```dotenv
+T212_DEMO=false
+T212_API_KEY=your_api_key_here
+T212_API_SECRET=your_api_secret_here
+T212_ENV=demo
 ```
+
+```bash
+docker compose up -d --build
+```
+
+> **Important:** Use a **read-only** Trading 212 API key — do not grant service execution or order permissions.
+
+Open the dashboard at `http://127.0.0.1:8000`.
 
 ## Security
 
@@ -84,6 +108,7 @@ http://127.0.0.1:8000
 - [Security](#security)
 - [Docker Deployment](#docker-deployment)
 - [Configuration](#configuration)
+- [Synthetic Demo Mode](#synthetic-demo-mode)
 - [API Routes](#api-routes)
 - [Operational Hardening](#operational-hardening)
 - [Instrument Metadata and Exposure](#instrument-metadata-and-exposure)
@@ -145,6 +170,9 @@ SQLite data is persisted through the bind mount:
 ./data -> /app/data
 ```
 
+The application listens on all interfaces (`0.0.0.0`) inside the container so Docker port forwarding works correctly.
+`T212_BIND_ADDRESS` controls the **host-side** Docker port binding only — it does not affect what the application listens on inside the container.
+
 The image runs exactly **one Uvicorn worker**. This is intentional because the monitor loop, SSE event broker, and metadata cache are process-local.
 
 **Stop the service (database preserved):**
@@ -183,6 +211,20 @@ Alert thresholds are disabled when blank. Example: a value of `8` means an alert
 `T212_RAW_RETENTION_DAYS` is also disabled when blank. When configured, the monitor periodically removes older account snapshots, position snapshots, and sampled market quotes while keeping low-volume audit data such as position events and alerts.
 
 The poll interval must be at least five seconds because the account-summary endpoint is rate-limited more strictly than the positions endpoint.
+
+## Synthetic Demo Mode
+
+```dotenv
+T212_DEMO=true
+```
+
+When enabled:
+
+- **No Trading 212 API calls** are made — the broker connection is skipped entirely.
+- **No credentials required** — `T212_API_KEY` and `T212_API_SECRET` are ignored.
+- **Separate database** — defaults to `data/demo-monitor.db` so it never overwrites the live `data/monitor.db`.
+- **Fully synthetic data** — the generator creates realistic portfolio history (24 h simulated, 6 positions, all lifecycle events) using deterministic randomness for reproducible screenshots.
+- Suitable for trying the dashboard, generating documentation screenshots, or testing UI changes without any broker access.
 
 ## API Routes
 

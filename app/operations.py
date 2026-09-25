@@ -78,10 +78,11 @@ def startup_checks(
     static_dir: Path,
     api_key: str,
     api_secret: str,
+    demo_mode: bool = False,
 ) -> dict[str, Any]:
     issues: list[dict[str, str]] = []
 
-    if not api_key or not api_secret:
+    if not demo_mode and (not api_key or not api_secret):
         issues.append(
             {
                 "severity": "critical",

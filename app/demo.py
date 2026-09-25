@@ -102,8 +102,8 @@ _POSITIONS: list[dict[str, Any]] = [
 
 # Timeline configuration for the synthetic history
 _HISTORY_HOURS = 24  # 24 hours of simulated history
-_POSITION_SNAPSHOT_INTERVAL = 1800  # every 30 minutes in simulated time (28 ticks)
-_ACCOUNT_SNAPSHOT_INTERVAL = 600  # every 10 minutes (10 per position tick)
+_POSITION_SNAPSHOT_INTERVAL = 1800  # every 30 minutes in simulated time (48 ticks)
+_ACCOUNT_SNAPSHOT_INTERVAL = 600  # every 10 minutes (3 account snapshots per position tick)
 
 # Seed for reproducibility (so screenshots are stable across runs)
 _RANDOM_SEED = 42
@@ -167,7 +167,7 @@ def seed_demo_data(db_path: Path, hours: int = _HISTORY_HOURS) -> None:
     db_path:
         SQLite database file to seed (e.g. ``data/demo-monitor.db``).
     hours:
-        Simulated time span in the past to back-fill (default 48 h).
+        Simulated time span in the past to back-fill (default 24 h).
     """
     from .db import SnapshotStore
 

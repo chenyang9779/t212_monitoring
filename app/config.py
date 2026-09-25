@@ -55,23 +55,31 @@ def _optional_positive_int(name: str) -> int | None:
     return value
 
 
-def load_settings() -> Settings:
-    # Check demo_mode BEFORE reading API credentials, because load_dotenv()
-    # (at module level) may have populated them from .env. In demo mode we
-    # clear them so that no broker client is created.
-    demo_mode = os.getenv("T212_DEMO", "").lower() == "true"
-    if demo_mode:
-        # When demo mode is enabled, clear API credentials and force the
-        # environment to 'demo' so that load_dotenv() values don't leak.
-        os.environ.pop("T212_API_KEY", None)
-        os.environ.pop("T212_API_SECRET", None)
-        os.environ.pop("T212_ENV", None)  # Will fall back to default 'demo'
+def _read_env(name: str, default: str = "") -> str:
+    """Read an environment variable after load_dotenv has run."""
+    return os.getenv(name, default).strip()
 
-    api_key = os.getenv("T212_API_KEY", "").strip()
-    api_secret = os.getenv("T212_API_SECRET", "").strip()
-    environment = os.getenv("T212_ENV", "demo").strip().lower()
-    if environment not in {"demo", "live"}:
-        raise ValueError("T212_ENV must be either 'demo' or 'live'")
+
+def load_settings() -> Settings:
+    # demo_mode must be checked BEFORE reading credentials, because
+    # load_dotenv() (at module level) may have populated them from .env.
+    demo_mode = _read_env("T212_DEMO", "").lower() == "true"
+
+    if demo_mode:
+        # Demo mode must never construct a Trading212Client, regardless of
+        # what credentials are in .env or the environment.
+        api_key = ""
+        api_secret = ""
+        environment = "demo"
+        # Use a separate database so demo mode never overwrites live data
+        db_path = Path(os.getenv("T212_DB_PATH", "data/demo-monitor.db"))
+    else:
+        api_key = _read_env("T212_API_KEY", "")
+        api_secret = _read_env("T212_API_SECRET", "")
+        environment = _read_env("T212_ENV", "demo")
+        if environment not in {"demo", "live"}:
+            raise ValueError("T212_ENV must be either 'demo' or 'live'")
+        db_path = Path(os.getenv("T212_DB_PATH", "data/monitor.db"))
 
     poll_seconds = _finite_float(
         "T212_POLL_SECONDS",
@@ -85,8 +93,6 @@ def load_settings() -> Settings:
         raise ValueError("T212_POLL_SECONDS must be >= 5 to respect the account-summary rate limit")
     if snapshot_seconds < poll_seconds:
         raise ValueError("T212_SNAPSHOT_SECONDS must be >= T212_POLL_SECONDS")
-
-    db_path = Path(os.getenv("T212_DB_PATH", "data/monitor.db"))
 
     return Settings(
         api_key=api_key,
